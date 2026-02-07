@@ -84,21 +84,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.refresh();
   }
 
-  public refresh() {
+  public async refresh() {
     if (this._view) {
       const currentRecord = this.timerService.getCurrentRecord();
       const aiEnabled = this.aiService.isEnabled();
-      const config = vscode.workspace.getConfiguration('bojmate.ai');
-      const provider = config.get<string>('provider', 'openai');
-      const model = config.get<string>('model', '');
+      const settings = await this.aiService.getSettings();
 
       this._view.webview.postMessage({
         command: 'update',
         currentProblem: currentRecord,
         aiStatus: {
           enabled: aiEnabled,
-          provider,
-          model
+          provider: settings.provider,
+          model: settings.model
         }
       });
     }

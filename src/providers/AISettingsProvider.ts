@@ -14,6 +14,7 @@ export class AISettingsProvider {
   async show(): Promise<void> {
     if (this.panel) {
       this.panel.reveal();
+      await this.sendCurrentSettings();
       return;
     }
 
@@ -27,15 +28,34 @@ export class AISettingsProvider {
       }
     );
 
-    this.panel.webview.html = await this.getHtmlContent();
+    this.panel.webview.html = this.getHtmlContent();
 
     this.panel.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
         case 'getSettings':
           await this.sendCurrentSettings();
           break;
-        case 'updateSetting':
-          await this.updateSetting(message.key, message.value);
+        case 'updateEnabled':
+          await this.aiService.updateSettings({ enabled: message.value });
+          break;
+        case 'updateProvider':
+          await this.aiService.updateSettings({ provider: message.value });
+          await this.sendCurrentSettings();
+          break;
+        case 'updateBaseUrl':
+          await this.aiService.updateSettings({ baseUrl: message.value });
+          break;
+        case 'updateApiKey':
+          await this.aiService.setApiKey(message.value);
+          break;
+        case 'updateModel':
+          await this.aiService.updateSettings({ model: message.value });
+          break;
+        case 'updateHintLevel':
+          await this.aiService.updateSettings({ hintLevel: message.value });
+          break;
+        case 'updateTimeout':
+          await this.aiService.updateSettings({ timeout: message.value });
           break;
         case 'testConnection':
           await this.testConnection();
@@ -44,7 +64,7 @@ export class AISettingsProvider {
           await this.fetchModels();
           break;
         case 'save':
-          await this.saveAndClose();
+          this.saveAndClose();
           break;
       }
     });
@@ -53,33 +73,20 @@ export class AISettingsProvider {
       this.panel = undefined;
     });
 
-    // 초기 설정 전송
     await this.sendCurrentSettings();
   }
 
   private async sendCurrentSettings(): Promise<void> {
-    const config = vscode.workspace.getConfiguration('bojmate.ai');
+    const settings = await this.aiService.getSettings();
+    const apiKey = await this.aiService.getApiKey();
+
     this.panel?.webview.postMessage({
       command: 'settings',
       data: {
-        enabled: config.get<boolean>('enabled', false),
-        provider: config.get<string>('provider', 'openai'),
-        baseUrl: config.get<string>('baseUrl', ''),
-        apiKey: config.get<string>('apiKey', ''),
-        model: config.get<string>('model', ''),
-        hintLevel: config.get<string>('hintLevel', 'algorithm')
+        ...settings,
+        apiKey: apiKey ? '••••••••' : ''
       }
     });
-  }
-
-  private async updateSetting(key: string, value: any): Promise<void> {
-    const config = vscode.workspace.getConfiguration('bojmate.ai');
-    await config.update(key, value, vscode.ConfigurationTarget.Global);
-
-    // provider나 baseUrl이 변경되면 클라이언트 재초기화
-    if (key === 'provider' || key === 'baseUrl' || key === 'apiKey') {
-      this.aiService.refreshClient();
-    }
   }
 
   private async testConnection(): Promise<void> {
@@ -88,7 +95,7 @@ export class AISettingsProvider {
       status: 'testing'
     });
 
-    this.aiService.refreshClient();
+    await this.aiService.refreshClient();
     const result = await this.aiService.testConnection();
 
     this.panel?.webview.postMessage({
@@ -113,12 +120,12 @@ export class AISettingsProvider {
     });
   }
 
-  private async saveAndClose(): Promise<void> {
+  private saveAndClose(): void {
     vscode.window.showInformationMessage('✅ AI 설정이 저장되었습니다.');
     this.panel?.dispose();
   }
 
-  private async getHtmlContent(): Promise<string> {
+  private getHtmlContent(): string {
     return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -175,7 +182,7 @@ export class AISettingsProvider {
       color: var(--vscode-descriptionForeground);
       margin-top: 4px;
     }
-    input[type="text"], input[type="password"], select {
+    input[type="text"], input[type="password"], input[type="number"], select {
       width: 100%;
       padding: 8px 12px;
       border: 1px solid var(--vscode-input-border);
@@ -297,6 +304,13 @@ export class AISettingsProvider {
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    .inline-group {
+      display: flex;
+      gap: 16px;
+    }
+    .inline-group .form-group {
+      flex: 1;
+    }
   </style>
 </head>
 <body>
@@ -347,27 +361,30 @@ export class AISettingsProvider {
     <div class="form-group">
       <label>Model</label>
       <div class="input-with-button">
-        <input type="text" id="modelInput" placeholder="모델을 선택하세요" readonly>
+        <select id="modelSelect" onchange="onModelSelect()">
+          <option value="">연결 후 모델 선택</option>
+        </select>
         <button id="connectBtn" class="btn-secondary" onclick="testAndFetchModels()">
           <span id="connectBtnText">연결</span>
         </button>
       </div>
       <div id="connectionStatus"></div>
-      <div id="modelSelectContainer" class="model-select-container hidden">
-        <select id="modelSelect" onchange="onModelSelect()">
-          <option value="">모델 선택...</option>
-        </select>
-      </div>
     </div>
 
-    <!-- Hint Level -->
-    <div class="form-group">
-      <label>힌트 레벨</label>
-      <select id="hintLevel" onchange="onHintLevelChange()">
-        <option value="algorithm">알고리즘 분류만</option>
-        <option value="stepByStep">단계별 힌트</option>
-        <option value="fullSolution">전체 풀이 + 코드</option>
-      </select>
+    <!-- Hint Level & Timeout -->
+    <div class="inline-group">
+      <div class="form-group">
+        <label>힌트 레벨</label>
+        <select id="hintLevel" onchange="onHintLevelChange()">
+          <option value="algorithm">알고리즘 분류만</option>
+          <option value="stepByStep">단계별 힌트</option>
+          <option value="fullSolution">전체 풀이 + 코드</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Timeout (초)</label>
+        <input type="number" id="timeout" min="10" max="300" value="60" onchange="onTimeoutChange()">
+      </div>
     </div>
   </div>
 
@@ -380,7 +397,6 @@ export class AISettingsProvider {
     let settings = {};
     let models = [];
 
-    // Provider descriptions
     const providerDescriptions = {
       openai: 'OpenAI API 키를 입력하세요',
       anthropic: 'Anthropic API 키를 입력하세요',
@@ -394,7 +410,7 @@ export class AISettingsProvider {
       const isEnabled = !toggle.classList.contains('active');
       toggle.classList.toggle('active', isEnabled);
       document.getElementById('aiSettings').classList.toggle('disabled', !isEnabled);
-      vscode.postMessage({ command: 'updateSetting', key: 'enabled', value: isEnabled });
+      vscode.postMessage({ command: 'updateEnabled', value: isEnabled });
     }
 
     function onProviderChange() {
@@ -405,27 +421,35 @@ export class AISettingsProvider {
       baseUrlGroup.classList.toggle('hidden', provider !== 'local');
       apiKeyDesc.textContent = providerDescriptions[provider];
 
-      vscode.postMessage({ command: 'updateSetting', key: 'provider', value: provider });
-
-      // 모델 선택 초기화
+      vscode.postMessage({ command: 'updateProvider', value: provider });
       resetModelSelection();
     }
 
     function onBaseUrlChange() {
       const baseUrl = document.getElementById('baseUrl').value;
-      vscode.postMessage({ command: 'updateSetting', key: 'baseUrl', value: baseUrl });
+      vscode.postMessage({ command: 'updateBaseUrl', value: baseUrl });
       resetModelSelection();
     }
 
     function onApiKeyChange() {
       const apiKey = document.getElementById('apiKey').value;
-      vscode.postMessage({ command: 'updateSetting', key: 'apiKey', value: apiKey });
+      vscode.postMessage({ command: 'updateApiKey', value: apiKey });
       resetModelSelection();
     }
 
+    function onHintLevelChange() {
+      const hintLevel = document.getElementById('hintLevel').value;
+      vscode.postMessage({ command: 'updateHintLevel', value: hintLevel });
+    }
+
+    function onTimeoutChange() {
+      const timeout = parseInt(document.getElementById('timeout').value) * 1000;
+      vscode.postMessage({ command: 'updateTimeout', value: timeout });
+    }
+
     function resetModelSelection() {
-      document.getElementById('modelInput').value = '';
-      document.getElementById('modelSelectContainer').classList.add('hidden');
+      const select = document.getElementById('modelSelect');
+      select.innerHTML = '<option value="">연결 후 모델 선택</option>';
       document.getElementById('connectionStatus').innerHTML = '';
     }
 
@@ -441,13 +465,8 @@ export class AISettingsProvider {
       const modelId = select.value;
       if (modelId) {
         document.getElementById('modelInput').value = modelId;
-        vscode.postMessage({ command: 'updateSetting', key: 'model', value: modelId });
+        vscode.postMessage({ command: 'updateModel', value: modelId });
       }
-    }
-
-    function onHintLevelChange() {
-      const hintLevel = document.getElementById('hintLevel').value;
-      vscode.postMessage({ command: 'updateSetting', key: 'hintLevel', value: hintLevel });
     }
 
     function save() {
@@ -470,14 +489,21 @@ export class AISettingsProvider {
       // Base URL
       document.getElementById('baseUrl').value = data.baseUrl || '';
 
-      // API Key (don't show actual value for security)
+      // API Key
       document.getElementById('apiKey').value = data.apiKey || '';
+      document.getElementById('apiKey').placeholder = data.apiKey ? '(설정됨)' : 'sk-...';
 
-      // Model
-      document.getElementById('modelInput').value = data.model || '';
+      // Model - 저장된 모델이 있으면 옵션에 추가
+      const modelSelect = document.getElementById('modelSelect');
+      if (data.model) {
+        modelSelect.innerHTML = '<option value="">모델 선택...</option><option value="' + data.model + '" selected>' + data.model + '</option>';
+      }
 
       // Hint Level
       document.getElementById('hintLevel').value = data.hintLevel || 'algorithm';
+
+      // Timeout
+      document.getElementById('timeout').value = (data.timeout || 60000) / 1000;
     }
 
     window.addEventListener('message', event => {
@@ -496,41 +522,36 @@ export class AISettingsProvider {
             statusDiv.innerHTML = '<div class="status loading"><span class="spinner"></span> 연결 중...</div>';
           } else if (message.status === 'success') {
             statusDiv.innerHTML = '<div class="status success">✓ ' + message.message + '</div>';
-            // 성공하면 모델 목록 가져오기
             vscode.postMessage({ command: 'fetchModels' });
           } else {
             statusDiv.innerHTML = '<div class="status error">✕ ' + message.message + '</div>';
           }
           break;
         case 'modelsStatus':
-          const modelContainer = document.getElementById('modelSelectContainer');
-          const modelSelect = document.getElementById('modelSelect');
+          const modelSel = document.getElementById('modelSelect');
 
           if (message.status === 'loading') {
-            modelContainer.classList.remove('hidden');
-            modelSelect.innerHTML = '<option value="">로딩 중...</option>';
-            modelSelect.disabled = true;
+            modelSel.innerHTML = '<option value="">모델 로딩 중...</option>';
+            modelSel.disabled = true;
           } else if (message.status === 'loaded') {
             models = message.models;
-            modelSelect.innerHTML = '<option value="">모델 선택...</option>';
+            modelSel.innerHTML = '<option value="">모델 선택...</option>';
             models.forEach(m => {
               const option = document.createElement('option');
               option.value = m.id;
               option.textContent = m.name;
-              modelSelect.appendChild(option);
+              modelSel.appendChild(option);
             });
-            modelSelect.disabled = false;
+            modelSel.disabled = false;
 
-            // 현재 설정된 모델 선택
             if (settings.model) {
-              modelSelect.value = settings.model;
+              modelSel.value = settings.model;
             }
           }
           break;
       }
     });
 
-    // 초기 설정 요청
     vscode.postMessage({ command: 'getSettings' });
   </script>
 </body>

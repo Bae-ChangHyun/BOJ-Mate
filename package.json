@@ -109,50 +109,6 @@
           "default": "",
           "description": "문제 파일이 저장될 워크스페이스 경로"
         },
-        "bojmate.ai.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "AI 힌트 기능 활성화"
-        },
-        "bojmate.ai.provider": {
-          "type": "string",
-          "enum": ["openai", "anthropic", "google", "openrouter", "local"],
-          "default": "openai",
-          "enumDescriptions": [
-            "OpenAI (GPT-4, GPT-4o 등)",
-            "Anthropic (Claude)",
-            "Google (Gemini)",
-            "OpenRouter (다양한 모델)",
-            "로컬/커스텀 서버"
-          ],
-          "description": "AI 제공자 선택"
-        },
-        "bojmate.ai.baseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "API 엔드포인트 URL (local 선택 시 필수)"
-        },
-        "bojmate.ai.apiKey": {
-          "type": "string",
-          "default": "",
-          "description": "API 키"
-        },
-        "bojmate.ai.model": {
-          "type": "string",
-          "default": "",
-          "description": "사용할 AI 모델 (연결 테스트 후 선택)"
-        },
-        "bojmate.ai.hintLevel": {
-          "type": "string",
-          "enum": ["algorithm", "stepByStep", "fullSolution"],
-          "default": "algorithm",
-          "enumDescriptions": [
-            "알고리즘 분류만 제공",
-            "단계별 힌트 제공",
-            "전체 풀이 및 코드 제공"
-          ],
-          "description": "AI 힌트 레벨"
-        },
         "bojmate.templates": {
           "type": "object",
           "default": {

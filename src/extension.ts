@@ -249,8 +249,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Watch for configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('bojmate.ai')) {
-        aiService.refreshClient();
+      if (e.affectsConfiguration('bojmate')) {
         sidebarProvider.refresh();
       }
     })
