@@ -63,6 +63,15 @@ export class AISettingsProvider {
         case 'fetchModels':
           await this.fetchModels();
           break;
+        case 'updateAdvancedParams':
+          try {
+            const parsed = JSON.parse(message.value || '{}');
+            await this.aiService.updateSettings({ advancedParams: parsed });
+            this.panel?.webview.postMessage({ command: 'advancedParamsStatus', status: 'success' });
+          } catch {
+            this.panel?.webview.postMessage({ command: 'advancedParamsStatus', status: 'error', message: 'JSON 형식이 올바르지 않습니다.' });
+          }
+          break;
         case 'save':
           this.saveAndClose();
           break;
@@ -386,6 +395,17 @@ export class AISettingsProvider {
         <input type="number" id="timeout" min="10" max="300" value="60" onchange="onTimeoutChange()">
       </div>
     </div>
+
+    <!-- Advanced Parameters -->
+    <div class="form-group" style="margin-top: 16px;">
+      <label>Advanced Parameters (JSON)</label>
+      <textarea id="advancedParams" rows="5" spellcheck="false"
+        style="width:100%; padding:8px 12px; border:1px solid var(--vscode-input-border); background:var(--vscode-input-background); color:var(--vscode-input-foreground); border-radius:4px; font-family:monospace; font-size:12px; resize:vertical;"
+        placeholder='{ "temperature": 0.7, "top_p": 1.0 }'
+        onblur="onAdvancedParamsChange()"></textarea>
+      <div id="advancedParamsStatus"></div>
+      <div class="description">API 요청에 추가할 파라미터 (temperature, top_p, frequency_penalty 등)</div>
+    </div>
   </div>
 
   <div class="actions">
@@ -464,8 +484,22 @@ export class AISettingsProvider {
       const select = document.getElementById('modelSelect');
       const modelId = select.value;
       if (modelId) {
-        document.getElementById('modelInput').value = modelId;
         vscode.postMessage({ command: 'updateModel', value: modelId });
+      }
+    }
+
+    function onAdvancedParamsChange() {
+      const value = document.getElementById('advancedParams').value.trim();
+      if (!value) {
+        vscode.postMessage({ command: 'updateAdvancedParams', value: '{}' });
+        document.getElementById('advancedParamsStatus').innerHTML = '';
+        return;
+      }
+      try {
+        JSON.parse(value);
+        vscode.postMessage({ command: 'updateAdvancedParams', value });
+      } catch (e) {
+        document.getElementById('advancedParamsStatus').innerHTML = '<div class="status error">JSON 형식 오류</div>';
       }
     }
 
@@ -504,6 +538,11 @@ export class AISettingsProvider {
 
       // Timeout
       document.getElementById('timeout').value = (data.timeout || 60000) / 1000;
+
+      // Advanced Params
+      const ap = data.advancedParams;
+      document.getElementById('advancedParams').value =
+        ap && Object.keys(ap).length > 0 ? JSON.stringify(ap, null, 2) : '';
     }
 
     window.addEventListener('message', event => {
@@ -525,6 +564,15 @@ export class AISettingsProvider {
             vscode.postMessage({ command: 'fetchModels' });
           } else {
             statusDiv.innerHTML = '<div class="status error">✕ ' + message.message + '</div>';
+          }
+          break;
+        case 'advancedParamsStatus':
+          const apStatus = document.getElementById('advancedParamsStatus');
+          if (message.status === 'success') {
+            apStatus.innerHTML = '<div class="status success">저장됨</div>';
+            setTimeout(() => { apStatus.innerHTML = ''; }, 2000);
+          } else {
+            apStatus.innerHTML = '<div class="status error">' + message.message + '</div>';
           }
           break;
         case 'modelsStatus':

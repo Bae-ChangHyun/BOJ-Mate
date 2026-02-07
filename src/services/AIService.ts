@@ -11,6 +11,7 @@ interface AISettings {
   model: string;
   hintLevel: HintLevel;
   timeout: number;
+  advancedParams: Record<string, unknown>;
 }
 
 interface ProviderConfig {
@@ -59,7 +60,8 @@ const DEFAULT_SETTINGS: AISettings = {
   baseUrl: '',
   model: '',
   hintLevel: 'algorithm',
-  timeout: 60000
+  timeout: 60000,
+  advancedParams: {}
 };
 
 const SETTINGS_KEY = 'bojmate.ai.settings';
@@ -236,12 +238,15 @@ export class AIService {
     try {
       let content: string;
 
+      const params = this.settings.advancedParams || {};
+
       if (this.settings.provider === 'anthropic') {
         const response = await this.client!.post('/messages', {
           model: this.settings.model,
           max_tokens: maxTokens,
           system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }]
+          messages: [{ role: 'user', content: userPrompt }],
+          ...params
         });
         content = response.data.content[0]?.text || '';
       } else if (this.settings.provider === 'google') {
@@ -251,7 +256,7 @@ export class AIService {
             contents: [{
               parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
             }],
-            generationConfig: { maxOutputTokens: maxTokens }
+            generationConfig: { maxOutputTokens: maxTokens, ...params }
           }
         );
         content = response.data.candidates[0]?.content?.parts[0]?.text || '';
@@ -263,7 +268,8 @@ export class AIService {
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.7,
-          max_tokens: maxTokens
+          max_tokens: maxTokens,
+          ...params
         });
         content = response.data.choices[0]?.message?.content || '';
       }
@@ -362,12 +368,15 @@ export class AIService {
     try {
       let content: string;
 
+      const params = this.settings.advancedParams || {};
+
       if (this.settings.provider === 'anthropic') {
         const response = await this.client!.post('/messages', {
           model: this.settings.model,
           max_tokens: 1500,
           system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }]
+          messages: [{ role: 'user', content: userPrompt }],
+          ...params
         });
         content = response.data.content[0]?.text || '';
       } else if (this.settings.provider === 'google') {
@@ -377,7 +386,7 @@ export class AIService {
             contents: [{
               parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
             }],
-            generationConfig: { maxOutputTokens: 1500 }
+            generationConfig: { maxOutputTokens: 1500, ...params }
           }
         );
         content = response.data.candidates[0]?.content?.parts[0]?.text || '';
@@ -389,7 +398,8 @@ export class AIService {
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.7,
-          max_tokens: 1500
+          max_tokens: 1500,
+          ...params
         });
         content = response.data.choices[0]?.message?.content || '';
       }

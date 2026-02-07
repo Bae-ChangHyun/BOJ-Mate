@@ -11,19 +11,22 @@ export class AuthService {
   }
 
   async openLoginPage(): Promise<void> {
-    // VS Code의 Simple Browser를 사용하여 로그인 페이지 열기
     const loginUrl = 'https://www.acmicpc.net/login';
 
-    await vscode.commands.executeCommand('simpleBrowser.show', loginUrl);
+    // 외부 브라우저로 열기
+    await vscode.env.openExternal(vscode.Uri.parse(loginUrl));
 
-    vscode.window.showInformationMessage(
-      '백준 로그인 페이지가 열렸습니다. 로그인 후 "BOJ Mate: 쿠키 저장" 명령을 실행해주세요.',
-      '쿠키 저장 방법'
-    ).then((selection) => {
-      if (selection === '쿠키 저장 방법') {
-        this.showCookieInstructions();
-      }
-    });
+    const selection = await vscode.window.showInformationMessage(
+      '백준 로그인 페이지가 브라우저에서 열렸습니다. 로그인 후 쿠키를 저장해주세요.',
+      '쿠키 저장하기',
+      '저장 방법 보기'
+    );
+
+    if (selection === '쿠키 저장하기') {
+      await this.promptForCookie();
+    } else if (selection === '저장 방법 보기') {
+      this.showCookieInstructions();
+    }
   }
 
   private showCookieInstructions(): void {
@@ -88,7 +91,7 @@ export class AuthService {
 
     try {
       // 쿠키 형식 정규화
-      const normalizedCookie = this.normalizeCookie(cookieValue);
+      const normalizedCookie = this.normalizeCookie(cookieValue.trim());
 
       // 암호화하여 저장 (VS Code의 SecretStorage 사용)
       await this.context.secrets.store(COOKIES_KEY, normalizedCookie);
@@ -99,7 +102,7 @@ export class AuthService {
         valid: true
       });
 
-      vscode.window.showInformationMessage('쿠키가 저장되었습니다. 이제 코드를 제출할 수 있습니다.');
+      vscode.window.showInformationMessage(`쿠키가 저장되었습니다. (${normalizedCookie.substring(0, 30)}...)`);
       return true;
     } catch (error) {
       vscode.window.showErrorMessage(`쿠키 저장 실패: ${error}`);
@@ -108,10 +111,22 @@ export class AuthService {
   }
 
   private normalizeCookie(cookieValue: string): string {
-    // "OnlineJudge=xxx" 형식 또는 단순 값 모두 처리
+    // 이미 "OnlineJudge=xxx" 형식인 경우 그대로 반환
     if (cookieValue.includes('OnlineJudge=')) {
       return cookieValue;
     }
+
+    // 여러 쿠키가 포함된 경우 (예: "cookie1=val1; cookie2=val2")
+    // OnlineJudge 쿠키만 추출
+    if (cookieValue.includes(';') && cookieValue.includes('=')) {
+      const cookies = cookieValue.split(';').map(c => c.trim());
+      const ojCookie = cookies.find(c => c.startsWith('OnlineJudge='));
+      if (ojCookie) {
+        return ojCookie;
+      }
+    }
+
+    // 단순 값인 경우 OnlineJudge= 접두사 추가
     return `OnlineJudge=${cookieValue}`;
   }
 
