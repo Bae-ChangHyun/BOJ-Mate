@@ -20,6 +20,7 @@ import { PushToGithubCommand } from './commands/pushToGithub';
 // Providers
 import { SidebarProvider } from './providers/SidebarProvider';
 import { StatsViewProvider } from './providers/StatsViewProvider';
+import { AISettingsProvider } from './providers/AISettingsProvider';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('BOJ Mate is now active!');
@@ -56,6 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
   const pushToGithubCommand = new PushToGithubCommand(templateService);
   const statsViewProvider = new StatsViewProvider(timerService);
+  const aiSettingsProvider = new AISettingsProvider(context, aiService);
 
   // Register sidebar provider
   const sidebarProvider = new SidebarProvider(
@@ -114,130 +116,9 @@ export function activate(context: vscode.ExtensionContext) {
       statsViewProvider.show();
     }),
 
-    // AI 설정 명령
+    // AI 설정 명령 - Webview 패널 열기
     vscode.commands.registerCommand('bojmate.configureAI', async () => {
-      const config = vscode.workspace.getConfiguration('bojmate.ai');
-
-      // 1. Provider 선택
-      const providers: { label: string; value: AIProvider; description: string }[] = [
-        { label: 'OpenAI', value: 'openai', description: 'GPT-4, GPT-4o 등' },
-        { label: 'Anthropic', value: 'anthropic', description: 'Claude 모델' },
-        { label: 'Google', value: 'google', description: 'Gemini 모델' },
-        { label: 'OpenRouter', value: 'openrouter', description: '다양한 모델 지원' },
-        { label: 'Local / Custom', value: 'local', description: '로컬 서버 또는 커스텀 엔드포인트' }
-      ];
-
-      const currentProvider = config.get<string>('provider', 'openai');
-      const selectedProvider = await vscode.window.showQuickPick(providers, {
-        placeHolder: '사용할 AI 제공자를 선택하세요',
-        title: 'AI Provider 선택'
-      });
-
-      if (!selectedProvider) return;
-
-      await config.update('provider', selectedProvider.value, vscode.ConfigurationTarget.Global);
-
-      // 2. Local인 경우 baseUrl 입력
-      if (selectedProvider.value === 'local') {
-        const baseUrl = await vscode.window.showInputBox({
-          prompt: 'API 엔드포인트 URL을 입력하세요',
-          placeHolder: 'http://localhost:11434/v1',
-          value: config.get<string>('baseUrl', ''),
-          validateInput: (value) => {
-            if (!value) return 'URL을 입력해주세요';
-            try {
-              new URL(value);
-              return null;
-            } catch {
-              return '올바른 URL 형식이 아닙니다';
-            }
-          }
-        });
-
-        if (!baseUrl) return;
-        await config.update('baseUrl', baseUrl, vscode.ConfigurationTarget.Global);
-      }
-
-      // 3. API Key 입력 (local이 아닌 경우 필수)
-      if (selectedProvider.value !== 'local' || !config.get<string>('apiKey')) {
-        const apiKey = await vscode.window.showInputBox({
-          prompt: `${selectedProvider.label} API 키를 입력하세요`,
-          placeHolder: 'sk-...',
-          password: true,
-          value: ''
-        });
-
-        if (!apiKey && selectedProvider.value !== 'local') {
-          vscode.window.showWarningMessage('API 키가 필요합니다.');
-          return;
-        }
-
-        if (apiKey) {
-          await config.update('apiKey', apiKey, vscode.ConfigurationTarget.Global);
-        }
-      }
-
-      // 클라이언트 재초기화
-      aiService.refreshClient();
-
-      // 4. 연결 테스트
-      const testResult = await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: '연결 테스트 중...'
-        },
-        async () => {
-          return await aiService.testConnection();
-        }
-      );
-
-      if (!testResult.success) {
-        vscode.window.showErrorMessage(`연결 실패: ${testResult.message}`);
-        return;
-      }
-
-      vscode.window.showInformationMessage(testResult.message);
-
-      // 5. 모델 목록 가져오기 및 선택
-      const models = await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: '모델 목록 가져오는 중...'
-        },
-        async () => {
-          return await aiService.fetchModels();
-        }
-      );
-
-      if (models.length === 0) {
-        vscode.window.showWarningMessage('사용 가능한 모델을 찾을 수 없습니다.');
-        return;
-      }
-
-      const modelItems = models.map((m) => ({
-        label: m.name,
-        description: m.id,
-        value: m.id
-      }));
-
-      const selectedModel = await vscode.window.showQuickPick(modelItems, {
-        placeHolder: '사용할 모델을 선택하세요',
-        title: '모델 선택'
-      });
-
-      if (!selectedModel) return;
-
-      await config.update('model', selectedModel.value, vscode.ConfigurationTarget.Global);
-
-      // 6. AI 활성화
-      await config.update('enabled', true, vscode.ConfigurationTarget.Global);
-
-      aiService.refreshClient();
-      sidebarProvider.refresh();
-
-      vscode.window.showInformationMessage(
-        `✅ AI 설정 완료! ${selectedProvider.label} / ${selectedModel.label}`
-      );
+      await aiSettingsProvider.show();
     }),
 
     vscode.commands.registerCommand('bojmate.testAIConnection', async () => {
