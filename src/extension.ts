@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 import { CacheManager } from './utils/cache';
 import { BojService } from './services/BojService';
 import { SolvedAcService } from './services/SolvedAcService';
-import { AuthService } from './services/AuthService';
 import { AIService, AIProvider } from './services/AIService';
 import { TimerService } from './services/TimerService';
 import { TemplateService } from './services/TemplateService';
@@ -16,6 +15,7 @@ import { RunTestsCommand } from './commands/runTests';
 import { SubmitCodeCommand } from './commands/submitCode';
 import { GetHintCommand } from './commands/getHint';
 import { PushToGithubCommand } from './commands/pushToGithub';
+import { GetFeedbackCommand } from './commands/getFeedback';
 
 // Providers
 import { SidebarProvider } from './providers/SidebarProvider';
@@ -29,7 +29,6 @@ export function activate(context: vscode.ExtensionContext) {
   const cacheManager = new CacheManager(context);
   const bojService = new BojService(context, cacheManager);
   const solvedAcService = new SolvedAcService(context, cacheManager);
-  const authService = new AuthService(context);
   const aiService = new AIService(context);
   const timerService = new TimerService(context);
   const templateService = new TemplateService(context);
@@ -42,10 +41,8 @@ export function activate(context: vscode.ExtensionContext) {
     templateService,
     timerService
   );
-  const runTestsCommand = new RunTestsCommand(timerService);
+  const runTestsCommand = new RunTestsCommand(timerService, templateService);
   const submitCodeCommand = new SubmitCodeCommand(
-    bojService,
-    authService,
     templateService,
     timerService
   );
@@ -56,6 +53,12 @@ export function activate(context: vscode.ExtensionContext) {
     templateService
   );
   const pushToGithubCommand = new PushToGithubCommand(templateService);
+  const getFeedbackCommand = new GetFeedbackCommand(
+    bojService,
+    solvedAcService,
+    aiService,
+    templateService
+  );
   const statsViewProvider = new StatsViewProvider(timerService);
   const aiSettingsProvider = new AISettingsProvider(context, aiService);
 
@@ -96,20 +99,12 @@ export function activate(context: vscode.ExtensionContext) {
       getHintCommand.execute(problemId);
     }),
 
+    vscode.commands.registerCommand('bojmate.getFeedback', (filePath?: string) => {
+      getFeedbackCommand.execute(filePath);
+    }),
+
     vscode.commands.registerCommand('bojmate.pushToGithub', (filePath?: string) => {
       pushToGithubCommand.execute(filePath);
-    }),
-
-    vscode.commands.registerCommand('bojmate.login', async () => {
-      await authService.openLoginPage();
-    }),
-
-    vscode.commands.registerCommand('bojmate.saveCookie', async () => {
-      await authService.promptForCookie();
-    }),
-
-    vscode.commands.registerCommand('bojmate.logout', async () => {
-      await authService.clearCookies();
     }),
 
     vscode.commands.registerCommand('bojmate.showStats', () => {

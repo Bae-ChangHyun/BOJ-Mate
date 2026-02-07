@@ -4,7 +4,7 @@ import { CacheEntry } from '../types';
 export class CacheManager {
   private memoryCache: Map<string, CacheEntry<unknown>> = new Map();
   private context: vscode.ExtensionContext;
-  private readonly defaultTTL = 30 * 60 * 1000; // 30분
+  private readonly defaultTTL = 24 * 60 * 60 * 1000; // 24시간
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;

@@ -231,6 +231,7 @@ export class AIService {
 
     const systemPrompt = this.getSystemPrompt(hintLevel);
     const userPrompt = this.buildPrompt(problem, hintLevel);
+    const maxTokens = hintLevel === 'fullSolution' ? 2500 : 1500;
 
     try {
       let content: string;
@@ -238,7 +239,7 @@ export class AIService {
       if (this.settings.provider === 'anthropic') {
         const response = await this.client!.post('/messages', {
           model: this.settings.model,
-          max_tokens: 4096,
+          max_tokens: maxTokens,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }]
         });
@@ -249,7 +250,8 @@ export class AIService {
           {
             contents: [{
               parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
-            }]
+            }],
+            generationConfig: { maxOutputTokens: maxTokens }
           }
         );
         content = response.data.candidates[0]?.content?.parts[0]?.text || '';
@@ -261,7 +263,7 @@ export class AIService {
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.7,
-          max_tokens: 4096
+          max_tokens: maxTokens
         });
         content = response.data.choices[0]?.message?.content || '';
       }
@@ -279,27 +281,14 @@ export class AIService {
   }
 
   private getSystemPrompt(level: HintLevel): string {
+    const base = '알고리즘 문제 힌트를 마크다운으로 간결하게 답변하세요. 불필요한 서론/맺음말 없이 핵심만 작성하세요.';
     switch (level) {
       case 'algorithm':
-        return `당신은 알고리즘 문제 해결 전문가입니다.
-사용자가 제시한 문제에 대해 어떤 알고리즘이나 자료구조를 사용해야 하는지만 힌트를 주세요.
-구체적인 풀이 방법이나 코드는 제공하지 마세요.
-간결하게 알고리즘 분류와 간단한 이유만 설명해주세요.`;
-
+        return `${base}\n사용할 알고리즘/자료구조 분류와 간단한 이유만 답변하세요. 코드나 풀이 과정은 제공하지 마세요.`;
       case 'stepByStep':
-        return `당신은 알고리즘 문제 해결 전문가입니다.
-사용자가 제시한 문제에 대해 단계별 힌트를 제공해주세요.
-코드는 제공하지 말고, 문제 해결 과정을 논리적 단계로 나누어 설명해주세요.
-각 단계는 명확하고 실행 가능해야 합니다.`;
-
+        return `${base}\n풀이 과정을 3~5단계로 나눠 설명하세요. 코드는 제공하지 마세요.`;
       case 'fullSolution':
-        return `당신은 알고리즘 문제 해결 전문가입니다.
-사용자가 제시한 문제에 대해 완전한 풀이를 제공해주세요.
-1. 문제 분석
-2. 알고리즘 선택 이유
-3. 시간/공간 복잡도
-4. Python 코드 (주석 포함)
-5. 주의할 점이나 엣지 케이스`;
+        return `${base}\n핵심 아이디어, 복잡도, Python 코드를 포함하여 답변하세요.`;
     }
   }
 
@@ -338,37 +327,104 @@ export class AIService {
   }
 
   private parseResponse(content: string, level: HintLevel): HintResponse {
-    const response: HintResponse = {
-      level,
-      content
-    };
-
-    const algorithmMatch = content.match(/알고리즘[:\s]*([^\n]+)/i);
-    if (algorithmMatch) {
-      response.algorithm = algorithmMatch[1]
-        .split(/[,、]/)
-        .map((s) => s.trim())
-        .filter((s) => s);
-    }
-
-    if (level === 'stepByStep' || level === 'fullSolution') {
-      const steps = content.match(/(?:^|\n)\d+\.\s*([^\n]+)/g);
-      if (steps) {
-        response.steps = steps.map((s) => s.replace(/^\n?\d+\.\s*/, '').trim());
-      }
-    }
-
-    if (level === 'fullSolution') {
-      const codeMatch = content.match(/```(?:python|py)?\n([\s\S]*?)```/);
-      if (codeMatch) {
-        response.code = codeMatch[1].trim();
-      }
-    }
-
-    return response;
+    return { level, content };
   }
 
   async refreshClient(): Promise<void> {
     await this.initClient();
+  }
+
+  async getFeedback(problem: Problem, code: string, language: string): Promise<string> {
+    if (!this.isEnabled()) {
+      throw new Error('AI 기능이 비활성화되어 있습니다. 설정에서 활성화해주세요.');
+    }
+
+    const apiKey = await this.getApiKey();
+
+    if (!this.settings.model) {
+      throw new Error('모델이 선택되지 않았습니다. 설정에서 모델을 선택해주세요.');
+    }
+
+    const systemPrompt = this.getFeedbackSystemPrompt();
+    const userPrompt = this.buildFeedbackPrompt(problem, code, language);
+
+    try {
+      let content: string;
+
+      if (this.settings.provider === 'anthropic') {
+        const response = await this.client!.post('/messages', {
+          model: this.settings.model,
+          max_tokens: 1500,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }]
+        });
+        content = response.data.content[0]?.text || '';
+      } else if (this.settings.provider === 'google') {
+        const response = await this.client!.post(
+          `/models/${this.settings.model}:generateContent?key=${apiKey}`,
+          {
+            contents: [{
+              parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+            }],
+            generationConfig: { maxOutputTokens: 1500 }
+          }
+        );
+        content = response.data.candidates[0]?.content?.parts[0]?.text || '';
+      } else {
+        const response = await this.client!.post('/chat/completions', {
+          model: this.settings.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 1500
+        });
+        content = response.data.choices[0]?.message?.content || '';
+      }
+
+      return content;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error(`AI API 시간 초과 (${this.settings.timeout / 1000}초)`);
+        }
+        throw new Error(`AI API 호출 실패: ${error.response?.data?.error?.message || error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  private getFeedbackSystemPrompt(): string {
+    return `코드 리뷰를 마크다운으로 간결하게 작성하세요. 불필요한 서론/맺음말 없이 핵심만.
+다음 항목만 짧게 답변: 정확성, 복잡도(시간/공간), 개선 제안.
+엣지 케이스가 있으면 언급하세요.`;
+  }
+
+  private buildFeedbackPrompt(problem: Problem, code: string, language: string): string {
+    let prompt = `## 문제: ${problem.id}번 - ${problem.title}\n\n`;
+    prompt += `### 시간 제한: ${problem.timeLimit}\n`;
+    prompt += `### 메모리 제한: ${problem.memoryLimit}\n\n`;
+    prompt += `### 문제 설명\n${this.stripHtml(problem.description)}\n\n`;
+    prompt += `### 입력\n${this.stripHtml(problem.input)}\n\n`;
+    prompt += `### 출력\n${this.stripHtml(problem.output)}\n\n`;
+
+    if (problem.testCases.length > 0) {
+      prompt += `### 예제\n`;
+      problem.testCases.forEach((tc, i) => {
+        prompt += `입력 ${i + 1}:\n${tc.input}\n\n`;
+        prompt += `출력 ${i + 1}:\n${tc.output}\n\n`;
+      });
+    }
+
+    if (problem.tags && problem.tags.length > 0) {
+      prompt += `### 문제 태그: ${problem.tags.join(', ')}\n\n`;
+    }
+
+    prompt += `---\n\n`;
+    prompt += `## 제출 코드 (${language})\n\`\`\`${language.toLowerCase()}\n${code}\n\`\`\`\n\n`;
+    prompt += `위 코드에 대해 상세한 피드백을 제공해주세요.`;
+
+    return prompt;
   }
 }

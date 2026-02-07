@@ -4,15 +4,18 @@ import * as fs from 'fs';
 import { CodeRunner, detectLanguage } from '../utils/compiler';
 import { TestCase, TestResult, SupportedLanguage } from '../types';
 import { TimerService } from '../services/TimerService';
+import { TemplateService } from '../services/TemplateService';
 
 export class RunTestsCommand {
   private codeRunner: CodeRunner;
   private timerService: TimerService;
+  private templateService: TemplateService;
   private outputChannel: vscode.OutputChannel;
 
-  constructor(timerService: TimerService) {
+  constructor(timerService: TimerService, templateService: TemplateService) {
     this.codeRunner = new CodeRunner();
     this.timerService = timerService;
+    this.templateService = templateService;
     this.outputChannel = vscode.window.createOutputChannel('BOJ Mate - 테스트');
   }
 
@@ -34,8 +37,8 @@ export class RunTestsCommand {
       return;
     }
 
-    // 테스트 케이스 로드
-    const testCases = this.loadTestCases(filePath);
+    // 테스트 케이스 및 제한시간 로드
+    const { testCases, timeLimitMs } = this.loadTestData(filePath);
     if (testCases.length === 0) {
       vscode.window.showWarningMessage('테스트 케이스를 찾을 수 없습니다.');
       return;
@@ -69,15 +72,43 @@ export class RunTestsCommand {
               message: `테스트 ${current}/${total}`,
               increment: (1 / total) * 100
             });
-          }
+          },
+          timeLimitMs
         );
 
-        this.showResults(results, filePath!);
+        this.showResults(results, filePath!, timeLimitMs);
       }
     );
   }
 
-  private loadTestCases(filePath: string): TestCase[] {
+  private loadTestData(filePath: string): { testCases: TestCase[]; timeLimitMs?: number } {
+    // 문제 번호 추출
+    const problemId = this.templateService.findProblemIdFromPath(filePath);
+    if (problemId) {
+      // globalState에서 메타데이터 조회
+      const metadata = this.templateService.getMetadataById(problemId);
+      if (metadata?.testCases && metadata.testCases.length > 0) {
+        const timeLimitMs = metadata.timeLimit ? this.parseTimeLimit(metadata.timeLimit) : undefined;
+        return { testCases: metadata.testCases, timeLimitMs };
+      }
+    }
+
+    // 메타데이터가 없으면 기존 방식으로 파일에서 로드 (하위 호환성)
+    return { testCases: this.loadTestCasesFromFiles(filePath) };
+  }
+
+  private parseTimeLimit(timeLimit: string): number {
+    // "1 초" → 1000ms, "2 초" → 2000ms, "0.5 초" → 500ms
+    // 로컬 실행은 BOJ 서버보다 느릴 수 있으므로 여유분(x2) 추가
+    const match = timeLimit.match(/([\d.]+)\s*초/);
+    if (match) {
+      const seconds = parseFloat(match[1]);
+      return Math.ceil(seconds * 2 * 1000); // x2 여유분
+    }
+    return 5000; // 파싱 실패 시 기본 5초
+  }
+
+  private loadTestCasesFromFiles(filePath: string): TestCase[] {
     const dir = path.dirname(filePath);
     const testCases: TestCase[] = [];
     let i = 1;
@@ -100,7 +131,7 @@ export class RunTestsCommand {
     return testCases;
   }
 
-  private showResults(results: TestResult[], filePath: string): void {
+  private showResults(results: TestResult[], filePath: string, timeLimitMs?: number): void {
     this.outputChannel.clear();
     this.outputChannel.show(true);
 
@@ -114,6 +145,9 @@ export class RunTestsCommand {
         ? '  ✅ 모든 테스트 통과!'
         : `  ❌ 테스트 결과: ${passed}/${total} 통과`
     );
+    if (timeLimitMs) {
+      this.outputChannel.appendLine(`  ⏱️ 제한시간: ${timeLimitMs / 2}ms (로컬 여유분 x2 = ${timeLimitMs}ms)`);
+    }
     this.outputChannel.appendLine('═'.repeat(60));
     this.outputChannel.appendLine('');
 

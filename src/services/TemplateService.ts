@@ -88,49 +88,90 @@ fn main() {
     tierName: string,
     tier: number,
     tags: string[]
-  ): Promise<{ codePath: string; metadataPath: string }> {
+  ): Promise<{ codePath: string }> {
     const config = vscode.workspace.getConfiguration('bojmate');
-    let workspacePath = config.get<string>('workspacePath', '');
+    const organizeByDate = config.get<boolean>('organizeByDate', false);
+    const organizeByLevel = config.get<boolean>('organizeByLevel', false);
 
-    // 워크스페이스 경로가 설정되지 않은 경우
-    if (!workspacePath) {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (workspaceFolders && workspaceFolders.length > 0) {
-        workspacePath = workspaceFolders[0].uri.fsPath;
-      } else {
-        // 사용자에게 폴더 선택 요청
-        const uri = await vscode.window.showOpenDialog({
-          canSelectFiles: false,
-          canSelectFolders: true,
-          canSelectMany: false,
-          openLabel: '문제 저장 폴더 선택'
-        });
+    // 현재 워크스페이스 폴더 사용
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      // 폴더를 선택하여 워크스페이스로 열기
+      const uri = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: '코테 연습 폴더 선택'
+      });
 
-        if (!uri || uri.length === 0) {
-          throw new Error('폴더를 선택해주세요.');
-        }
-        workspacePath = uri[0].fsPath;
+      if (uri && uri.length > 0) {
+        await vscode.commands.executeCommand('vscode.openFolder', uri[0]);
       }
+      throw new Error('폴더를 열고 다시 시도해주세요.');
     }
 
-    // 문제 폴더 생성
-    const problemFolder = path.join(workspacePath, problem.id);
-    if (!fs.existsSync(problemFolder)) {
-      fs.mkdirSync(problemFolder, { recursive: true });
+    const outputDir = workspaceFolders[0].uri.fsPath;
+
+    // .vscode/settings.json 자동 생성 (Copilot 비활성화)
+    await this.ensureWorkspaceSettings(outputDir);
+
+    // 폴더 구조 생성
+    let targetDir = outputDir;
+
+    if (organizeByDate) {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      targetDir = path.join(targetDir, today);
     }
 
-    // 코드 파일 생성
+    if (organizeByLevel) {
+      // 티어 그룹 추출 (Bronze, Silver, Gold, Platinum, Diamond, Ruby, Unrated)
+      const tierGroup = this.getTierGroup(tier);
+      targetDir = path.join(targetDir, tierGroup);
+    }
+
+    // 폴더 생성
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    // 코드 파일 생성 (번호_문제명.확장자)
     const langConfig = LANGUAGE_CONFIG[language];
-    const codeFileName = language === 'java' ? 'Main.java' : `${problem.id}${langConfig.extension}`;
-    const codePath = path.join(problemFolder, codeFileName);
+    const safeName = this.sanitizeFileName(problem.title);
+    const baseFileName = `${problem.id}_${safeName}`;
+    let codeFileName = `${baseFileName}${langConfig.extension}`;
+    let codePath = path.join(targetDir, codeFileName);
 
-    if (!fs.existsSync(codePath)) {
-      const template = this.getTemplate(language);
-      const code = this.applyTemplate(template, problem, tierName);
-      fs.writeFileSync(codePath, code, 'utf-8');
+    // 파일이 이미 존재하는 경우
+    if (fs.existsSync(codePath)) {
+      const action = await vscode.window.showWarningMessage(
+        `파일이 이미 존재합니다: ${codeFileName}`,
+        '덮어쓰기',
+        '새로 만들기',
+        '취소'
+      );
+
+      if (action === '취소' || !action) {
+        throw new Error('파일 생성이 취소되었습니다.');
+      }
+
+      if (action === '새로 만들기') {
+        // 고유한 파일명 찾기 (문제번호_(n).확장자)
+        let suffix = 1;
+        while (fs.existsSync(codePath)) {
+          codeFileName = `${baseFileName}_(${suffix})${langConfig.extension}`;
+          codePath = path.join(targetDir, codeFileName);
+          suffix++;
+        }
+      }
+      // '덮어쓰기'인 경우 그대로 진행
     }
 
-    // 메타데이터 파일 생성
+    // 파일 생성
+    const template = this.getTemplate(language);
+    const code = this.applyTemplate(template, problem, tierName);
+    fs.writeFileSync(codePath, code, 'utf-8');
+
+    // 메타데이터를 globalState에 저장
     const metadata: ProblemMetadata = {
       problemId: problem.id,
       title: problem.title,
@@ -138,73 +179,87 @@ fn main() {
       tierName,
       language,
       createdAt: Date.now(),
-      tags
+      tags,
+      codePath,
+      testCases: problem.testCases,
+      timeLimit: problem.timeLimit
     };
 
-    const metadataPath = path.join(problemFolder, 'problem.json');
-    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+    await this.saveMetadata(problem.id, metadata);
 
-    // 테스트 케이스 파일 생성
-    for (let i = 0; i < problem.testCases.length; i++) {
-      const tc = problem.testCases[i];
-      fs.writeFileSync(
-        path.join(problemFolder, `input${i + 1}.txt`),
-        tc.input,
-        'utf-8'
-      );
-      fs.writeFileSync(
-        path.join(problemFolder, `output${i + 1}.txt`),
-        tc.output,
-        'utf-8'
-      );
-    }
-
-    return { codePath, metadataPath };
+    return { codePath };
   }
 
-  async getMetadata(problemFolder: string): Promise<ProblemMetadata | null> {
-    const metadataPath = path.join(problemFolder, 'problem.json');
-    if (!fs.existsSync(metadataPath)) {
-      return null;
+  private async ensureWorkspaceSettings(workspaceDir: string): Promise<void> {
+    const vscodeDir = path.join(workspaceDir, '.vscode');
+    const settingsPath = path.join(vscodeDir, 'settings.json');
+
+    // 이미 있으면 건너뛰기
+    if (fs.existsSync(settingsPath)) {
+      return;
     }
 
-    try {
-      const content = fs.readFileSync(metadataPath, 'utf-8');
-      return JSON.parse(content) as ProblemMetadata;
-    } catch {
-      return null;
+    if (!fs.existsSync(vscodeDir)) {
+      fs.mkdirSync(vscodeDir, { recursive: true });
     }
+
+    const settings = {
+      "github.copilot.enable": {
+        "*": false,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+      },
+      "github.copilot.editor.enableAutoCompletions": false,
+      "editor.inlineSuggest.enabled": false
+    };
+
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  }
+
+  private sanitizeFileName(name: string): string {
+    return name
+      .replace(/[\/\\:*?"<>|]/g, '')   // 파일시스템 금지 문자 제거
+      .replace(/\s+/g, '_')            // 공백 → _
+      .replace(/_+/g, '_')             // 연속 _ 정리
+      .replace(/^_|_$/g, '');           // 양끝 _ 제거
+  }
+
+  private getTierGroup(tier: number): string {
+    if (tier === 0) return 'Unrated';
+    if (tier <= 5) return 'Bronze';
+    if (tier <= 10) return 'Silver';
+    if (tier <= 15) return 'Gold';
+    if (tier <= 20) return 'Platinum';
+    if (tier <= 25) return 'Diamond';
+    if (tier <= 30) return 'Ruby';
+    return 'Unknown';
+  }
+
+  async saveMetadata(problemId: string, metadata: ProblemMetadata): Promise<void> {
+    await this.context.globalState.update(`bojmate.metadata:${problemId}`, metadata);
+  }
+
+  getMetadataById(problemId: string): ProblemMetadata | undefined {
+    return this.context.globalState.get<ProblemMetadata>(`bojmate.metadata:${problemId}`);
   }
 
   async updateMetadata(
-    problemFolder: string,
+    problemId: string,
     updates: Partial<ProblemMetadata>
   ): Promise<void> {
-    const metadata = await this.getMetadata(problemFolder);
+    const metadata = this.getMetadataById(problemId);
     if (metadata) {
       const updated = { ...metadata, ...updates };
-      const metadataPath = path.join(problemFolder, 'problem.json');
-      fs.writeFileSync(metadataPath, JSON.stringify(updated, null, 2), 'utf-8');
+      await this.saveMetadata(problemId, updated);
     }
   }
 
   findProblemIdFromPath(filePath: string): string | null {
-    // 파일 경로에서 문제 번호 추출 시도
-    const dir = path.dirname(filePath);
-    const dirName = path.basename(dir);
-
-    // 디렉토리 이름이 숫자인 경우
-    if (/^\d+$/.test(dirName)) {
-      return dirName;
-    }
-
-    // 파일 이름에서 추출 시도 (예: 1000.py, 1000.cpp)
+    // 파일명 맨 앞 숫자가 문제번호
+    // 1000_A+B.py, 1000_A+B_(1).py, 1000.py 등
     const fileName = path.basename(filePath);
-    const match = fileName.match(/^(\d+)\./);
-    if (match) {
-      return match[1];
-    }
-
-    return null;
+    const match = fileName.match(/^(\d+)/);
+    return match ? match[1] : null;
   }
 }

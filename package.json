@@ -40,14 +40,14 @@
         "title": "BOJ Mate: AI 힌트"
       },
       {
+        "command": "bojmate.getFeedback",
+        "title": "BOJ Mate: AI 피드백"
+      },
+      {
         "command": "bojmate.pushToGithub",
         "title": "BOJ Mate: GitHub 푸시"
       },
-      {
-        "command": "bojmate.login",
-        "title": "BOJ Mate: 로그인"
-      },
-      {
+{
         "command": "bojmate.showStats",
         "title": "BOJ Mate: 통계 보기"
       },
@@ -104,10 +104,15 @@
           "default": "py",
           "description": "기본 언어"
         },
-        "bojmate.workspacePath": {
-          "type": "string",
-          "default": "",
-          "description": "문제 파일이 저장될 워크스페이스 경로"
+        "bojmate.organizeByDate": {
+          "type": "boolean",
+          "default": false,
+          "description": "날짜별로 폴더 분류 (YYYY-MM-DD)"
+        },
+        "bojmate.organizeByLevel": {
+          "type": "boolean",
+          "default": false,
+          "description": "난이도별로 폴더 분류 (Bronze, Silver 등)"
         },
         "bojmate.templates": {
           "type": "object",

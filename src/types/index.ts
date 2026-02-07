@@ -92,6 +92,9 @@ export interface ProblemMetadata {
   language: string;
   createdAt: number;
   tags: string[];
+  codePath?: string;
+  testCases?: TestCase[];
+  timeLimit?: string;
 }
 
 export interface CacheEntry<T> {

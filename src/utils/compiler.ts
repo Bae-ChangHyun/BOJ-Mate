@@ -19,7 +19,7 @@ export interface ExecutionResult {
 }
 
 export class CodeRunner {
-  private readonly timeoutMs: number = 5000; // 5초 타임아웃
+  private readonly defaultTimeoutMs: number = 5000; // 5초 기본 타임아웃
 
   async compile(filePath: string, language: SupportedLanguage): Promise<CompileResult> {
     const config = LANGUAGE_CONFIG[language];
@@ -65,7 +65,8 @@ export class CodeRunner {
     filePath: string,
     language: SupportedLanguage,
     input: string,
-    compiledPath?: string
+    compiledPath?: string,
+    timeLimitMs?: number
   ): Promise<ExecutionResult> {
     const config = LANGUAGE_CONFIG[language];
     const dir = path.dirname(filePath);
@@ -77,6 +78,7 @@ export class CodeRunner {
       .replace('{dir}', dir);
 
     const [cmd, ...args] = command.split(' ');
+    const effectiveTimeout = timeLimitMs || this.defaultTimeoutMs;
 
     return new Promise((resolve) => {
       const startTime = Date.now();
@@ -86,11 +88,11 @@ export class CodeRunner {
 
       const proc = spawn(cmd, args, { cwd: dir });
 
-      // 타임아웃 설정
+      // 타임아웃 설정 (문제 제한시간 사용)
       const timer = setTimeout(() => {
         timeout = true;
         proc.kill('SIGKILL');
-      }, this.timeoutMs);
+      }, effectiveTimeout);
 
       // 입력 전달
       if (input) {
@@ -135,7 +137,8 @@ export class CodeRunner {
     filePath: string,
     language: SupportedLanguage,
     testCases: TestCase[],
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    timeLimitMs?: number
   ): Promise<TestResult[]> {
     const results: TestResult[] = [];
 
@@ -162,7 +165,8 @@ export class CodeRunner {
         filePath,
         language,
         tc.input,
-        compileResult.outputPath
+        compileResult.outputPath,
+        timeLimitMs
       );
 
       const expected = normalizeOutput(tc.output);

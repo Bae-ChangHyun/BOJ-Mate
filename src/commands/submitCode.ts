@@ -1,26 +1,17 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { BojService } from '../services/BojService';
-import { AuthService } from '../services/AuthService';
 import { TemplateService } from '../services/TemplateService';
 import { TimerService } from '../services/TimerService';
 import { detectLanguage } from '../utils/compiler';
-import { LANGUAGE_CONFIG } from '../types';
 
 export class SubmitCodeCommand {
-  private bojService: BojService;
-  private authService: AuthService;
   private templateService: TemplateService;
   private timerService: TimerService;
 
   constructor(
-    bojService: BojService,
-    authService: AuthService,
     templateService: TemplateService,
     timerService: TimerService
   ) {
-    this.bojService = bojService;
-    this.authService = authService;
     this.templateService = templateService;
     this.timerService = timerService;
   }
@@ -42,7 +33,7 @@ export class SubmitCodeCommand {
     }
 
     // 문제 번호 추출
-    const problemId = this.templateService.findProblemIdFromPath(filePath);
+    let problemId = this.templateService.findProblemIdFromPath(filePath);
     if (!problemId) {
       const input = await vscode.window.showInputBox({
         prompt: '문제 번호를 입력하세요',
@@ -51,6 +42,7 @@ export class SubmitCodeCommand {
       if (!input) {
         return;
       }
+      problemId = input;
     }
 
     // 언어 감지
@@ -60,101 +52,36 @@ export class SubmitCodeCommand {
       return;
     }
 
-    // 로그인 확인
-    const isLoggedIn = await this.authService.isLoggedIn();
-    if (!isLoggedIn) {
-      const action = await vscode.window.showWarningMessage(
-        '로그인이 필요합니다.',
-        '로그인',
-        '취소'
-      );
-
-      if (action === '로그인') {
-        await this.authService.openLoginPage();
-      }
-      return;
-    }
-
-    // 쿠키 가져오기
-    const cookies = await this.authService.getCookies();
-    if (!cookies) {
-      vscode.window.showErrorMessage('저장된 쿠키를 찾을 수 없습니다. 다시 로그인해주세요.');
-      return;
-    }
-
-    // 코드 읽기
+    // 코드를 클립보드에 복사
     const code = fs.readFileSync(filePath, 'utf-8');
-    const languageId = LANGUAGE_CONFIG[language].bojLanguageId;
+    await vscode.env.clipboard.writeText(code);
 
-    // 제출 확인
-    const confirm = await vscode.window.showWarningMessage(
-      `${problemId}번 문제에 ${LANGUAGE_CONFIG[language].name} 코드를 제출할까요?`,
-      '제출',
-      '취소'
-    );
+    // 브라우저에서 제출 페이지 열기
+    const submitUrl = `https://www.acmicpc.net/submit/${problemId}`;
+    await vscode.env.openExternal(vscode.Uri.parse(submitUrl));
 
-    if (confirm !== '제출') {
-      return;
-    }
+    vscode.window.showInformationMessage(
+      `코드가 클립보드에 복사되었습니다. 브라우저에서 붙여넣기(Cmd+V) 후 제출해주세요.`,
+      '제출 결과 확인'
+    ).then(async (selection) => {
+      if (selection === '제출 결과 확인') {
+        const statusUrl = `https://www.acmicpc.net/status?from_mine=1&problem_id=${problemId}`;
+        await vscode.env.openExternal(vscode.Uri.parse(statusUrl));
 
-    // 제출
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: '코드 제출 중...',
-        cancellable: false
-      },
-      async (progress) => {
-        try {
-          progress.report({ message: '제출 중...' });
-
-          const result = await this.bojService.submitCode(
-            problemId!,
-            code,
-            languageId,
-            cookies
+        // 타이머 종료 확인
+        const currentRecord = this.timerService.getCurrentRecord();
+        if (currentRecord && currentRecord.problemId === problemId) {
+          const stopTimer = await vscode.window.showInformationMessage(
+            '문제를 해결하셨나요?',
+            '해결 완료',
+            '계속 풀기'
           );
 
-          if (result.success) {
-            vscode.window.showInformationMessage(
-              `✅ 제출 완료! ${result.submissionId ? `(제출 번호: ${result.submissionId})` : ''}`
-            );
-
-            // 제출 결과 확인 링크
-            if (result.submissionId) {
-              const viewResult = await vscode.window.showInformationMessage(
-                '제출 결과를 확인하시겠습니까?',
-                '확인하기'
-              );
-
-              if (viewResult === '확인하기') {
-                const uri = vscode.Uri.parse(
-                  `https://www.acmicpc.net/status?from_mine=1&problem_id=${problemId}`
-                );
-                vscode.env.openExternal(uri);
-              }
-            }
-
-            // 타이머 종료 확인
-            const currentRecord = this.timerService.getCurrentRecord();
-            if (currentRecord && currentRecord.problemId === problemId) {
-              const stopTimer = await vscode.window.showInformationMessage(
-                '문제를 해결하셨나요?',
-                '해결 완료',
-                '계속 풀기'
-              );
-
-              if (stopTimer === '해결 완료') {
-                await this.timerService.stopTimer('solved');
-              }
-            }
-          } else {
-            vscode.window.showErrorMessage(`❌ 제출 실패: ${result.error}`);
+          if (stopTimer === '해결 완료') {
+            await this.timerService.stopTimer('solved');
           }
-        } catch (error) {
-          vscode.window.showErrorMessage(`제출 오류: ${error}`);
         }
       }
-    );
+    });
   }
 }

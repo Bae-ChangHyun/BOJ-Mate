@@ -61,6 +61,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         case 'getHint':
           vscode.commands.executeCommand('bojmate.getHint');
           break;
+        case 'getFeedback':
+          vscode.commands.executeCommand('bojmate.getFeedback');
+          break;
         case 'showStats':
           vscode.commands.executeCommand('bojmate.showStats');
           break;
@@ -351,6 +354,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <span class="icon">💡</span>
         <span>AI 힌트</span>
       </button>
+      <button onclick="getFeedback()">
+        <span class="icon">📝</span>
+        <span>AI 피드백</span>
+      </button>
       <button onclick="showStats()">
         <span class="icon">📈</span>
         <span>통계</span>
@@ -380,6 +387,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     function runTests() { vscode.postMessage({ command: 'runTests' }); }
     function submitCode() { vscode.postMessage({ command: 'submitCode' }); }
     function getHint() { vscode.postMessage({ command: 'getHint' }); }
+    function getFeedback() { vscode.postMessage({ command: 'getFeedback' }); }
     function showStats() { vscode.postMessage({ command: 'showStats' }); }
     function openAISettings() { vscode.postMessage({ command: 'openAISettings' }); }
 
