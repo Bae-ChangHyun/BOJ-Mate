@@ -217,7 +217,7 @@ export class AIService {
     return this.cachedModels;
   }
 
-  async getHint(problem: Problem, level?: HintLevel): Promise<HintResponse> {
+  async getHint(problem: Problem, level?: HintLevel, userCode?: string): Promise<HintResponse> {
     if (!this.isEnabled()) {
       throw new Error('AI 힌트 기능이 비활성화되어 있습니다. 설정에서 활성화해주세요.');
     }
@@ -229,8 +229,8 @@ export class AIService {
       throw new Error('모델이 선택되지 않았습니다. 설정에서 모델을 선택해주세요.');
     }
 
-    const systemPrompt = this.getSystemPrompt(hintLevel);
-    const userPrompt = this.buildPrompt(problem, hintLevel);
+    const systemPrompt = this.getSystemPrompt(hintLevel, !!userCode);
+    const userPrompt = this.buildPrompt(problem, hintLevel, userCode);
     const maxTokens = hintLevel === 'fullSolution' ? 2500 : 1500;
 
     try {
@@ -280,8 +280,14 @@ export class AIService {
     }
   }
 
-  private getSystemPrompt(level: HintLevel): string {
+  private getSystemPrompt(level: HintLevel, hasCode: boolean): string {
     const base = '알고리즘 문제 힌트를 마크다운으로 간결하게 답변하세요. 불필요한 서론/맺음말 없이 핵심만 작성하세요.';
+
+    if (hasCode) {
+      // 사용자 코드가 있으면 코드 기반 맞춤 힌트
+      return `${base}\n사용자가 작성 중인 코드가 함께 제공됩니다. 코드의 현재 진행 상황을 파악하고, 막혀있는 부분이나 논리적 오류를 짚어주고, 다음에 해야 할 단계를 안내하세요. 정답 코드를 직접 제공하지 말고 방향만 알려주세요.`;
+    }
+
     switch (level) {
       case 'algorithm':
         return `${base}\n사용할 알고리즘/자료구조 분류와 간단한 이유만 답변하세요. 코드나 풀이 과정은 제공하지 마세요.`;
@@ -292,7 +298,7 @@ export class AIService {
     }
   }
 
-  private buildPrompt(problem: Problem, level: HintLevel): string {
+  private buildPrompt(problem: Problem, level: HintLevel, userCode?: string): string {
     let prompt = `## 문제: ${problem.id}번 - ${problem.title}\n\n`;
     prompt += `### 시간 제한: ${problem.timeLimit}\n`;
     prompt += `### 메모리 제한: ${problem.memoryLimit}\n\n`;
@@ -309,7 +315,12 @@ export class AIService {
     }
 
     if (problem.tags && problem.tags.length > 0) {
-      prompt += `### 태그 (참고용): ${problem.tags.join(', ')}\n`;
+      prompt += `### 태그 (참고용): ${problem.tags.join(', ')}\n\n`;
+    }
+
+    if (userCode && userCode.trim()) {
+      prompt += `---\n\n### 현재 작성 중인 코드\n\`\`\`\n${userCode}\n\`\`\`\n\n`;
+      prompt += `위 코드를 기반으로 다음 단계를 안내해주세요.`;
     }
 
     return prompt;

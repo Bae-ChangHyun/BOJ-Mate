@@ -85,7 +85,18 @@ export class GetHintCommand {
             problem.tags = this.solvedAcService.getTagsKorean(solvedInfo);
           }
 
-          const hint = await this.aiService.getHint(problem, selectedLevel.value);
+          // 현재 열린 파일의 코드를 가져옴 (작성 중인 코드가 있으면 맞춤 힌트)
+          let userCode: string | undefined;
+          const activeEditor = vscode.window.activeTextEditor;
+          if (activeEditor) {
+            const code = activeEditor.document.getText().trim();
+            // 템플릿만 있는 수준(5줄 이하)이면 코드 없는 것으로 취급
+            if (code && code.split('\n').length > 5) {
+              userCode = code;
+            }
+          }
+
+          const hint = await this.aiService.getHint(problem, selectedLevel.value, userCode);
 
           const panel = vscode.window.createWebviewPanel(
             'bojmateHint',
