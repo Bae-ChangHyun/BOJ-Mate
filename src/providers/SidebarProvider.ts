@@ -38,12 +38,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.extensionUri]
     };
 
-    // 태그 목록 로드
     this.tags = await this.solvedAcService.getAllTags();
-
     webviewView.webview.html = this.getHtmlContent();
 
-    // 메시지 핸들러
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
         case 'viewProblem':
@@ -75,7 +72,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.refresh();
           break;
         case 'search':
-          await this.search(message.tierMin, message.tierMax, message.tag);
+          await this.handleSearch(message.query, message.tierMin, message.tierMax, message.tag);
           break;
         case 'refresh':
           this.refresh();
@@ -83,7 +80,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // 초기 데이터 전송
     this.refresh();
   }
 
@@ -105,31 +101,84 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async search(tierMin?: number, tierMax?: number, tag?: string): Promise<void> {
-    const result = await this.solvedAcService.searchByTierAndTag(tierMin, tierMax, tag);
+  private async handleSearch(query?: string, tierMin?: number, tierMax?: number, tag?: string): Promise<void> {
+    if (!this._view) return;
 
-    if (this._view) {
+    // 로딩 표시
+    this._view.webview.postMessage({ command: 'searchLoading' });
+
+    try {
+      // 쿼리 조합: 텍스트 + 필터
+      const queryParts: string[] = [];
+
+      if (query && query.trim()) {
+        // 숫자만이면 문제번호 검색, 아니면 텍스트 검색
+        if (/^\d+$/.test(query.trim())) {
+          queryParts.push(`id:${query.trim()}`);
+        } else {
+          queryParts.push(query.trim());
+        }
+      }
+
+      if (tierMin !== undefined && tierMax !== undefined) {
+        queryParts.push(`tier:${tierMin}..${tierMax}`);
+      } else if (tierMin !== undefined) {
+        queryParts.push(`tier:${tierMin}..30`);
+      } else if (tierMax !== undefined) {
+        queryParts.push(`tier:0..${tierMax}`);
+      }
+
+      if (tag) {
+        queryParts.push(`tag:${tag}`);
+      }
+
+      if (queryParts.length === 0) {
+        queryParts.push('solvable:true');
+      } else {
+        queryParts.push('solvable:true');
+      }
+
+      const result = await this.solvedAcService.searchProblems(queryParts.join(' '));
+
       this._view.webview.postMessage({
         command: 'searchResults',
-        problems: result.items.slice(0, 20).map((p) => ({
+        problems: result.items.slice(0, 30).map((p) => ({
           id: p.problemId.toString(),
           title: p.titleKo,
           tier: p.level,
           tierName: getTierName(p.level),
           tierColor: getTierColor(p.level)
-        }))
+        })),
+        total: result.count
+      });
+    } catch {
+      this._view.webview.postMessage({
+        command: 'searchResults',
+        problems: [],
+        total: 0
       });
     }
   }
 
   private getHtmlContent(): string {
-    const tierOptions = Object.entries(TIER_NAMES)
-      .filter(([level]) => parseInt(level) > 0)
-      .map(([level, name]) => `<option value="${level}">${name}</option>`)
-      .join('');
+    // 티어를 그룹별로 묶기
+    const tierGroups = [
+      { label: 'Bronze', tiers: [1, 2, 3, 4, 5] },
+      { label: 'Silver', tiers: [6, 7, 8, 9, 10] },
+      { label: 'Gold', tiers: [11, 12, 13, 14, 15] },
+      { label: 'Platinum', tiers: [16, 17, 18, 19, 20] },
+      { label: 'Diamond', tiers: [21, 22, 23, 24, 25] },
+      { label: 'Ruby', tiers: [26, 27, 28, 29, 30] }
+    ];
+
+    const tierOptions = tierGroups.map(g =>
+      `<optgroup label="${g.label}">` +
+      g.tiers.map(t => `<option value="${t}">${TIER_NAMES[t]}</option>`).join('') +
+      `</optgroup>`
+    ).join('');
 
     const tagOptions = this.tags
-      .slice(0, 50) // 상위 50개 태그만
+      .slice(0, 50)
       .map(tag => `<option value="${tag.key}">${tag.name} (${tag.problemCount})</option>`)
       .join('');
 
@@ -152,169 +201,179 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     .section-title {
       font-weight: bold;
       margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--vscode-descriptionForeground);
+      letter-spacing: 0.5px;
     }
-    .search-box { display: flex; gap: 6px; }
-    .search-box input {
-      flex: 1;
-      padding: 6px 10px;
+
+    /* 검색 */
+    .search-input {
+      width: 100%;
+      padding: 7px 10px;
       border: 1px solid var(--vscode-input-border);
       background: var(--vscode-input-background);
       color: var(--vscode-input-foreground);
       border-radius: 4px;
       font-size: 13px;
+      margin-bottom: 8px;
     }
-    .search-box input:focus { outline: 1px solid var(--vscode-focusBorder); }
-    .search-box button, .filter-row button {
-      padding: 6px 12px;
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .search-box button:hover, .filter-row button:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
-    .current-problem {
-      background: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
-      padding: 12px;
-    }
-    .current-problem .title { font-weight: bold; margin-bottom: 6px; }
-    .current-problem .timer { font-size: 18px; font-family: monospace; margin: 8px 0; }
-    .current-problem .actions { display: flex; gap: 8px; margin-top: 10px; }
-    .current-problem .actions button {
-      flex: 1;
-      padding: 6px;
-      font-size: 12px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .btn-success { background: #28a745; color: white; }
-    .btn-danger { background: #dc3545; color: white; }
+    .search-input:focus { outline: 1px solid var(--vscode-focusBorder); }
     .filter-row {
       display: flex;
       gap: 6px;
-      margin-bottom: 8px;
-      align-items: center;
+      margin-bottom: 6px;
     }
     .filter-row select {
       flex: 1;
-      padding: 6px;
+      padding: 5px;
       background: var(--vscode-dropdown-background);
       color: var(--vscode-dropdown-foreground);
       border: 1px solid var(--vscode-dropdown-border);
       border-radius: 4px;
       font-size: 12px;
     }
-    .filter-row span { font-size: 12px; }
-    .quick-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .quick-actions button {
-      padding: 10px;
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
+    .filter-row span { font-size: 12px; line-height: 28px; }
+    .btn-row { display: flex; gap: 6px; }
+    .btn {
+      flex: 1;
+      padding: 6px;
       border: none;
-      border-radius: 6px;
+      border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
     }
-    .quick-actions button:hover {
-      background: var(--vscode-button-secondaryHoverBackground);
+    .btn-primary {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
     }
-    .quick-actions .icon { font-size: 18px; }
-    .problem-list { max-height: 200px; overflow-y: auto; margin-top: 8px; }
+    .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
+    .btn-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+    /* 결과 */
+    .result-header {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      margin: 8px 0 4px;
+    }
+    .problem-list { max-height: 300px; overflow-y: auto; }
     .problem-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 8px;
+      padding: 5px 8px;
       border-radius: 4px;
       cursor: pointer;
     }
     .problem-item:hover { background: var(--vscode-list-hoverBackground); }
-    .problem-item .tier-badge {
-      width: 8px;
-      height: 8px;
+    .tier-dot {
+      width: 8px; height: 8px;
       border-radius: 50%;
+      flex-shrink: 0;
     }
-    .problem-item .id {
+    .problem-item .pid {
       color: var(--vscode-descriptionForeground);
-      min-width: 50px;
+      min-width: 45px;
+      font-size: 12px;
     }
-    .no-problem {
+    .problem-item .pname {
+      flex: 1;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .problem-item .ptier {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      flex-shrink: 0;
+    }
+    .empty-msg {
       color: var(--vscode-descriptionForeground);
       text-align: center;
-      padding: 20px;
+      padding: 16px;
+      font-size: 12px;
     }
+    .loading { text-align: center; padding: 16px; font-size: 12px; color: var(--vscode-descriptionForeground); }
+
+    /* 타이머 */
+    .current-problem {
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .current-problem .title { font-weight: bold; margin-bottom: 4px; font-size: 13px; }
+    .current-problem .timer { font-size: 18px; font-family: monospace; margin: 6px 0; }
+    .current-problem .meta { font-size: 11px; color: var(--vscode-descriptionForeground); }
+    .current-problem .actions { display: flex; gap: 6px; margin-top: 8px; }
+    .current-problem .actions button {
+      flex: 1; padding: 5px; font-size: 12px;
+      border: none; border-radius: 4px; cursor: pointer;
+    }
+    .btn-success { background: #28a745; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+
+    /* AI */
     .ai-status {
-      font-size: 11px;
-      padding: 6px 8px;
+      font-size: 11px; padding: 6px 8px;
       background: var(--vscode-editor-background);
       border-radius: 4px;
-      margin-bottom: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      display: flex; justify-content: space-between; align-items: center;
     }
-    .ai-status .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 6px;
+    .status-dot {
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; margin-right: 5px;
     }
-    .ai-status .enabled { background: #28a745; }
-    .ai-status .disabled { background: #dc3545; }
+    .enabled { background: #28a745; }
+    .disabled { background: #6c757d; }
     .ai-status button {
-      padding: 2px 8px;
-      font-size: 11px;
+      padding: 2px 8px; font-size: 11px;
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
+      border: none; border-radius: 3px; cursor: pointer;
+    }
+
+    /* 빠른실행 */
+    .quick-actions {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+    .quick-actions button {
+      padding: 8px 4px;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none; border-radius: 4px; cursor: pointer;
+      font-size: 11px; text-align: center;
+    }
+    .quick-actions button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    .quick-actions .icon { display: block; font-size: 16px; margin-bottom: 2px; }
+
+    hr {
       border: none;
-      border-radius: 3px;
-      cursor: pointer;
+      border-top: 1px solid var(--vscode-panel-border);
+      margin: 12px 0;
     }
   </style>
 </head>
 <body>
+  <!-- 문제 검색 -->
   <div class="section">
-    <div class="section-title">🔍 문제 검색</div>
-    <div class="search-box">
-      <input type="text" id="problemId" placeholder="문제 번호" />
-      <button onclick="viewProblem()">보기</button>
-      <button onclick="createProblem()">생성</button>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">📊 현재 진행 중</div>
-    <div id="currentProblem" class="no-problem">
-      진행 중인 문제가 없습니다
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">🏷️ 필터 검색</div>
+    <div class="section-title">문제 검색</div>
+    <input type="text" class="search-input" id="searchQuery"
+           placeholder="번호, 제목, 또는 키워드 검색" />
     <div class="filter-row">
       <select id="tierMin">
-        <option value="">난이도 (최소)</option>
+        <option value="">최소 난이도</option>
         ${tierOptions}
       </select>
       <span>~</span>
       <select id="tierMax">
-        <option value="">난이도 (최대)</option>
+        <option value="">최대 난이도</option>
         ${tierOptions}
       </select>
     </div>
@@ -323,45 +382,46 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <option value="">알고리즘 분류</option>
         ${tagOptions}
       </select>
-      <button onclick="search()">검색</button>
     </div>
-    <div id="searchResults" class="problem-list"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="doSearch()">검색</button>
+      <button class="btn btn-secondary" onclick="directCreate()">바로 생성</button>
+      <button class="btn btn-secondary" onclick="directView()">보기</button>
+    </div>
+    <div id="searchResults"></div>
   </div>
 
+  <hr>
+
+  <!-- 현재 진행 중 -->
   <div class="section">
-    <div class="section-title">💡 AI 힌트</div>
+    <div class="section-title">현재 진행 중</div>
+    <div id="currentProblem" class="empty-msg">진행 중인 문제가 없습니다</div>
+  </div>
+
+  <hr>
+
+  <!-- AI 상태 -->
+  <div class="section">
+    <div class="section-title">AI</div>
     <div id="aiStatus" class="ai-status">
-      <span>
-        <span class="status-dot disabled"></span>
-        설정 필요
-      </span>
+      <span><span class="status-dot disabled"></span>설정 필요</span>
       <button onclick="openAISettings()">설정</button>
     </div>
   </div>
 
+  <hr>
+
+  <!-- 빠른 실행 -->
   <div class="section">
-    <div class="section-title">⚡ 빠른 실행</div>
+    <div class="section-title">빠른 실행</div>
     <div class="quick-actions">
-      <button onclick="runTests()">
-        <span class="icon">▶️</span>
-        <span>테스트</span>
-      </button>
-      <button onclick="submitCode()">
-        <span class="icon">📤</span>
-        <span>제출</span>
-      </button>
-      <button onclick="getHint()">
-        <span class="icon">💡</span>
-        <span>AI 힌트</span>
-      </button>
-      <button onclick="getFeedback()">
-        <span class="icon">📝</span>
-        <span>AI 피드백</span>
-      </button>
-      <button onclick="showStats()">
-        <span class="icon">📈</span>
-        <span>통계</span>
-      </button>
+      <button onclick="cmd('runTests')"><span class="icon">▶</span>테스트</button>
+      <button onclick="cmd('submitCode')"><span class="icon">↗</span>제출</button>
+      <button onclick="cmd('getHint')"><span class="icon">?</span>힌트</button>
+      <button onclick="cmd('getFeedback')"><span class="icon">✎</span>피드백</button>
+      <button onclick="cmd('showStats')"><span class="icon">≡</span>통계</button>
+      <button onclick="openAISettings()"><span class="icon">⚙</span>AI 설정</button>
     </div>
   </div>
 
@@ -370,138 +430,132 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     let currentProblem = null;
     let timerInterval = null;
 
-    function viewProblem() {
-      const problemId = document.getElementById('problemId').value.trim();
-      if (problemId) {
-        vscode.postMessage({ command: 'viewProblem', problemId });
-      }
-    }
+    function cmd(name) { vscode.postMessage({ command: name }); }
+    function openAISettings() { cmd('openAISettings'); }
 
-    function createProblem() {
-      const problemId = document.getElementById('problemId').value.trim();
-      if (problemId) {
-        vscode.postMessage({ command: 'createProblem', problemId });
-      }
-    }
-
-    function runTests() { vscode.postMessage({ command: 'runTests' }); }
-    function submitCode() { vscode.postMessage({ command: 'submitCode' }); }
-    function getHint() { vscode.postMessage({ command: 'getHint' }); }
-    function getFeedback() { vscode.postMessage({ command: 'getFeedback' }); }
-    function showStats() { vscode.postMessage({ command: 'showStats' }); }
-    function openAISettings() { vscode.postMessage({ command: 'openAISettings' }); }
-
-    function search() {
+    // === 검색 ===
+    function doSearch() {
+      const query = document.getElementById('searchQuery').value.trim();
       const tierMin = document.getElementById('tierMin').value;
       const tierMax = document.getElementById('tierMax').value;
       const tag = document.getElementById('tagFilter').value;
 
-      if (!tierMin && !tierMax && !tag) {
-        return;
-      }
+      if (!query && !tierMin && !tierMax && !tag) return;
 
       vscode.postMessage({
         command: 'search',
+        query: query || undefined,
         tierMin: tierMin ? parseInt(tierMin) : undefined,
         tierMax: tierMax ? parseInt(tierMax) : undefined,
         tag: tag || undefined
       });
     }
 
-    function stopTimer(status) {
-      vscode.postMessage({ command: 'stopTimer', status });
+    function directCreate() {
+      const q = document.getElementById('searchQuery').value.trim();
+      if (q && /^\\d+$/.test(q)) {
+        vscode.postMessage({ command: 'createProblem', problemId: q });
+      }
     }
 
-    function formatTime(ms) {
-      const seconds = Math.floor(ms / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      if (hours > 0) {
-        return hours + ':' + String(minutes % 60).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+    function directView() {
+      const q = document.getElementById('searchQuery').value.trim();
+      if (q && /^\\d+$/.test(q)) {
+        vscode.postMessage({ command: 'viewProblem', problemId: q });
       }
-      return minutes + ':' + String(seconds % 60).padStart(2, '0');
+    }
+
+    function selectProblem(id, action) {
+      vscode.postMessage({ command: action, problemId: id });
+    }
+
+    // 검색 결과 렌더링
+    function renderResults(problems, total) {
+      const el = document.getElementById('searchResults');
+      if (!problems || problems.length === 0) {
+        el.innerHTML = '<div class="empty-msg">결과 없음</div>';
+        return;
+      }
+
+      let html = '<div class="result-header">' + total + '개 중 ' + problems.length + '개 표시</div>';
+      html += '<div class="problem-list">';
+      for (const p of problems) {
+        html += '<div class="problem-item" onclick="selectProblem(\\'' + p.id + '\\', \\'createProblem\\')" title="클릭하여 생성">' +
+          '<span class="tier-dot" style="background:' + p.tierColor + '"></span>' +
+          '<span class="pid">' + p.id + '</span>' +
+          '<span class="pname">' + p.title + '</span>' +
+          '<span class="ptier">' + p.tierName + '</span>' +
+          '</div>';
+      }
+      html += '</div>';
+      el.innerHTML = html;
+    }
+
+    // === 타이머 ===
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const h = Math.floor(m / 60);
+      if (h > 0) return h + ':' + String(m % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      return m + ':' + String(s % 60).padStart(2, '0');
     }
 
     function updateCurrentProblem() {
-      const container = document.getElementById('currentProblem');
+      const el = document.getElementById('currentProblem');
       if (!currentProblem) {
-        container.className = 'no-problem';
-        container.innerHTML = '진행 중인 문제가 없습니다';
+        el.className = 'empty-msg';
+        el.innerHTML = '진행 중인 문제가 없습니다';
         return;
       }
       const elapsed = Date.now() - currentProblem.startTime;
-      container.className = 'current-problem';
-      container.innerHTML = \`
-        <div class="title">\${currentProblem.problemId}번: \${currentProblem.title}</div>
-        <div class="timer">⏱️ \${formatTime(elapsed)}</div>
-        <div style="font-size: 12px; color: var(--vscode-descriptionForeground);">
-          시도: \${currentProblem.attempts}회 | \${currentProblem.tierName}
-        </div>
-        <div class="actions">
-          <button class="btn-success" onclick="stopTimer('solved')">✅ 완료</button>
-          <button class="btn-danger" onclick="stopTimer('failed')">❌ 포기</button>
-        </div>
-      \`;
+      el.className = 'current-problem';
+      el.innerHTML =
+        '<div class="title">' + currentProblem.problemId + '번: ' + currentProblem.title + '</div>' +
+        '<div class="timer">' + formatTime(elapsed) + '</div>' +
+        '<div class="meta">시도 ' + currentProblem.attempts + '회 · ' + currentProblem.tierName + '</div>' +
+        '<div class="actions">' +
+          '<button class="btn-success" onclick="vscode.postMessage({command:\\'stopTimer\\',status:\\'solved\\'})">완료</button>' +
+          '<button class="btn-danger" onclick="vscode.postMessage({command:\\'stopTimer\\',status:\\'failed\\'})">포기</button>' +
+        '</div>';
     }
 
-    function updateAIStatus(aiStatus) {
-      const container = document.getElementById('aiStatus');
-      if (aiStatus.enabled) {
-        container.innerHTML = \`
-          <span>
-            <span class="status-dot enabled"></span>
-            \${aiStatus.provider} / \${aiStatus.model || '모델 미선택'}
-          </span>
-          <button onclick="openAISettings()">설정</button>
-        \`;
+    function updateAIStatus(ai) {
+      const el = document.getElementById('aiStatus');
+      if (ai.enabled) {
+        el.innerHTML = '<span><span class="status-dot enabled"></span>' +
+          ai.provider + ' / ' + (ai.model || '모델 미선택') + '</span>' +
+          '<button onclick="openAISettings()">설정</button>';
       } else {
-        container.innerHTML = \`
-          <span>
-            <span class="status-dot disabled"></span>
-            설정 필요
-          </span>
-          <button onclick="openAISettings()">설정</button>
-        \`;
+        el.innerHTML = '<span><span class="status-dot disabled"></span>설정 필요</span>' +
+          '<button onclick="openAISettings()">설정</button>';
       }
     }
 
-    function renderSearchResults(problems) {
-      const container = document.getElementById('searchResults');
-      if (!problems || problems.length === 0) {
-        container.innerHTML = '<div class="no-problem">검색 결과가 없습니다</div>';
-        return;
-      }
-      container.innerHTML = problems.map(p => \`
-        <div class="problem-item" onclick="vscode.postMessage({ command: 'createProblem', problemId: '\${p.id}' })">
-          <span class="tier-badge" style="background: \${p.tierColor}"></span>
-          <span class="id">\${p.id}</span>
-          <span>\${p.title}</span>
-        </div>
-      \`).join('');
-    }
-
-    window.addEventListener('message', event => {
-      const message = event.data;
-      switch (message.command) {
+    // === 메시지 수신 ===
+    window.addEventListener('message', e => {
+      const msg = e.data;
+      switch (msg.command) {
         case 'update':
-          currentProblem = message.currentProblem;
+          currentProblem = msg.currentProblem;
           if (timerInterval) clearInterval(timerInterval);
           if (currentProblem && currentProblem.status === 'solving') {
             timerInterval = setInterval(updateCurrentProblem, 1000);
           }
           updateCurrentProblem();
-          if (message.aiStatus) {
-            updateAIStatus(message.aiStatus);
-          }
+          if (msg.aiStatus) updateAIStatus(msg.aiStatus);
+          break;
+        case 'searchLoading':
+          document.getElementById('searchResults').innerHTML = '<div class="loading">검색 중...</div>';
           break;
         case 'searchResults':
-          renderSearchResults(message.problems);
+          renderResults(msg.problems, msg.total);
           break;
       }
     });
 
-    document.getElementById('problemId').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') viewProblem();
+    // Enter 키로 검색
+    document.getElementById('searchQuery').addEventListener('keypress', e => {
+      if (e.key === 'Enter') doSearch();
     });
 
     vscode.postMessage({ command: 'refresh' });
