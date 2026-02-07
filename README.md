@@ -1,0 +1,143 @@
+# BOJ Mate 🎯
+
+백준 온라인 저지 문제 풀이를 위한 올인원 VS Code 익스텐션
+
+## 주요 기능
+
+### 📋 문제 관리
+- **문제 보기**: 문제 번호로 백준 문제 조회 (난이도, 태그 포함)
+- **문제 생성**: 자동으로 폴더/파일 생성 및 템플릿 적용
+- **테스트 케이스**: 예제 입출력 자동 저장 및 테스트
+
+### ⚡ 빠른 실행
+- **테스트 실행**: 저장된 테스트 케이스로 코드 검증
+- **코드 제출**: 쿠키 기반 자동 제출 (로그인 필요)
+- **GitHub 푸시**: 커스텀 커밋 메시지 템플릿
+
+### 💡 AI 힌트
+- **알고리즘 분류**: 어떤 알고리즘을 사용해야 하는지 힌트
+- **단계별 힌트**: 풀이 과정을 단계별로 안내
+- **전체 풀이**: 완전한 풀이와 코드 제공
+
+### ⏱️ 풀이 통계
+- 문제별 풀이 시간 측정
+- 난이도별 통계
+- 최근 풀이 기록
+
+## 설치
+
+### VS Code Marketplace에서 설치
+1. VS Code 실행
+2. Extensions (Ctrl+Shift+X) 열기
+3. "BOJ Mate" 검색
+4. Install 클릭
+
+### VSIX 파일로 설치
+```bash
+code --install-extension boj-mate-0.0.1.vsix
+```
+
+## 설정
+
+### 기본 설정
+```json
+{
+  "bojmate.username": "your_boj_username",
+  "bojmate.language": "py",
+  "bojmate.workspacePath": "/path/to/problems"
+}
+```
+
+### AI 힌트 설정
+```json
+{
+  "bojmate.ai.enabled": true,
+  "bojmate.ai.baseUrl": "https://api.openai.com/v1",
+  "bojmate.ai.apiKey": "your_api_key",
+  "bojmate.ai.hintLevel": "algorithm"
+}
+```
+
+### 코드 템플릿
+```json
+{
+  "bojmate.templates": {
+    "py": "# ${problemId}번: ${title}\nimport sys\ninput = sys.stdin.readline\n",
+    "cpp": "// ${problemId}번: ${title}\n#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(0);\n    cin.tie(0);\n    return 0;\n}"
+  }
+}
+```
+
+## 사용법
+
+### 1. 문제 생성
+1. 사이드바에서 문제 번호 입력
+2. "생성" 버튼 클릭
+3. 언어 선택
+4. 자동 생성된 파일에서 코딩 시작
+
+### 2. 테스트 실행
+- 단축키: `Ctrl+Shift+T` (설정 가능)
+- 명령 팔레트: `BOJ Mate: 테스트 실행`
+
+### 3. 코드 제출
+1. `BOJ Mate: 로그인` 실행
+2. 백준 사이트에서 로그인
+3. 쿠키 저장
+4. `BOJ Mate: 코드 제출` 실행
+
+### 4. AI 힌트
+1. 설정에서 AI API 설정
+2. 문제를 열고 `BOJ Mate: AI 힌트` 실행
+3. 힌트 레벨 선택
+
+## 지원 언어
+
+| 언어 | 확장자 | 백준 언어 ID |
+|------|--------|-------------|
+| C++ | .cpp | 1001 (C++17) |
+| Python | .py | 28 (Python 3) |
+| Java | .java | 93 (Java 11) |
+| JavaScript | .js | 17 (Node.js) |
+| Rust | .rs | 94 (Rust 2021) |
+
+## 파일 구조
+
+문제 생성 시 다음과 같은 구조가 생성됩니다:
+
+```
+1000/
+├── 1000.py          # 코드 파일
+├── problem.json     # 메타데이터
+├── input1.txt       # 테스트 입력 1
+├── output1.txt      # 테스트 출력 1
+├── input2.txt       # 테스트 입력 2
+└── output2.txt      # 테스트 출력 2
+```
+
+## 커맨드
+
+| 명령 | 설명 |
+|------|------|
+| `BOJ Mate: 문제 보기` | 문제 웹뷰로 표시 |
+| `BOJ Mate: 문제 생성` | 새 문제 폴더/파일 생성 |
+| `BOJ Mate: 테스트 실행` | 테스트 케이스 실행 |
+| `BOJ Mate: 코드 제출` | 백준에 코드 제출 |
+| `BOJ Mate: AI 힌트` | AI 힌트 요청 |
+| `BOJ Mate: GitHub 푸시` | Git 커밋 및 푸시 |
+| `BOJ Mate: 로그인` | 백준 로그인 |
+| `BOJ Mate: 통계 보기` | 풀이 통계 확인 |
+| `BOJ Mate: 타이머 시작` | 풀이 타이머 시작 |
+| `BOJ Mate: 타이머 종료` | 풀이 타이머 종료 |
+
+## 라이선스
+
+MIT License
+
+## 기여
+
+이슈 및 PR 환영합니다!
+
+---
+
+Made with ❤️ for BOJ users
