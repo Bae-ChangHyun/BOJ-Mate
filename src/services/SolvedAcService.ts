@@ -148,4 +148,57 @@ export class SolvedAcService {
       return korean?.name || tag.key;
     });
   }
+
+  async getAllTags(): Promise<Array<{ key: string; name: string; problemCount: number }>> {
+    const cacheKey = 'cache:tags:all';
+    const cached = await this.cache.get<Array<{ key: string; name: string; problemCount: number }>>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const response = await this.client.get('/tag/list', {
+        params: { sort: 'problemCount', direction: 'desc' }
+      });
+
+      const tags = (response.data.items || []).map((tag: any) => {
+        const korean = tag.displayNames?.find((d: any) => d.language === 'ko');
+        return {
+          key: tag.key,
+          name: korean?.name || tag.key,
+          problemCount: tag.problemCount
+        };
+      });
+
+      // 캐시에 저장 (24시간)
+      await this.cache.set(cacheKey, tags, 24 * 60 * 60 * 1000);
+
+      return tags;
+    } catch (error) {
+      console.error('태그 목록 가져오기 실패:', error);
+      return [];
+    }
+  }
+
+  async searchByTierAndTag(
+    tierMin?: number,
+    tierMax?: number,
+    tag?: string,
+    page: number = 1
+  ): Promise<SearchResult> {
+    const queryParts: string[] = [];
+
+    if (tierMin !== undefined && tierMax !== undefined) {
+      queryParts.push(`tier:${tierMin}..${tierMax}`);
+    }
+
+    if (tag) {
+      queryParts.push(`tag:${tag}`);
+    }
+
+    queryParts.push('solvable:true');
+
+    const query = queryParts.join(' ');
+    return this.searchProblems(query, page);
+  }
 }

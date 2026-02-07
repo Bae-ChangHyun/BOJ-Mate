@@ -10,7 +10,11 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:bojmate.sidebarView",
+    "onCommand:bojmate.viewProblem",
+    "onCommand:bojmate.createProblem"
+  ],
   "main": "./dist/extension.js",
   "icon": "resources/icon.png",
   "contributes": {
@@ -54,6 +58,18 @@
       {
         "command": "bojmate.stopTimer",
         "title": "BOJ Mate: 타이머 종료"
+      },
+      {
+        "command": "bojmate.configureAI",
+        "title": "BOJ Mate: AI 설정"
+      },
+      {
+        "command": "bojmate.testAIConnection",
+        "title": "BOJ Mate: AI 연결 테스트"
+      },
+      {
+        "command": "bojmate.selectAIModel",
+        "title": "BOJ Mate: AI 모델 선택"
       }
     ],
     "viewsContainers": {
@@ -98,15 +114,33 @@
           "default": false,
           "description": "AI 힌트 기능 활성화"
         },
+        "bojmate.ai.provider": {
+          "type": "string",
+          "enum": ["openai", "anthropic", "google", "openrouter", "local"],
+          "default": "openai",
+          "enumDescriptions": [
+            "OpenAI (GPT-4, GPT-4o 등)",
+            "Anthropic (Claude)",
+            "Google (Gemini)",
+            "OpenRouter (다양한 모델)",
+            "로컬/커스텀 서버"
+          ],
+          "description": "AI 제공자 선택"
+        },
         "bojmate.ai.baseUrl": {
           "type": "string",
           "default": "",
-          "description": "AI API 엔드포인트 URL"
+          "description": "API 엔드포인트 URL (local 선택 시 필수)"
         },
         "bojmate.ai.apiKey": {
           "type": "string",
           "default": "",
-          "description": "AI API 키"
+          "description": "API 키"
+        },
+        "bojmate.ai.model": {
+          "type": "string",
+          "default": "",
+          "description": "사용할 AI 모델 (연결 테스트 후 선택)"
         },
         "bojmate.ai.hintLevel": {
           "type": "string",

@@ -2,33 +2,179 @@ import axios, { AxiosInstance } from 'axios';
 import * as vscode from 'vscode';
 import { Problem, HintLevel, HintResponse } from '../types';
 
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'local';
+
+interface ProviderConfig {
+  baseUrl: string;
+  modelsEndpoint: string;
+  chatEndpoint: string;
+  authHeader: (apiKey: string) => Record<string, string>;
+}
+
+const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
+  openai: {
+    baseUrl: 'https://api.openai.com/v1',
+    modelsEndpoint: '/models',
+    chatEndpoint: '/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` })
+  },
+  anthropic: {
+    baseUrl: 'https://api.anthropic.com/v1',
+    modelsEndpoint: '/models',
+    chatEndpoint: '/messages',
+    authHeader: (key) => ({ 'x-api-key': key, 'anthropic-version': '2023-06-01' })
+  },
+  google: {
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    modelsEndpoint: '/models',
+    chatEndpoint: '/models/{model}:generateContent',
+    authHeader: () => ({}) // API key is passed as query param
+  },
+  openrouter: {
+    baseUrl: 'https://openrouter.ai/api/v1',
+    modelsEndpoint: '/models',
+    chatEndpoint: '/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` })
+  },
+  local: {
+    baseUrl: '', // User must provide
+    modelsEndpoint: '/models',
+    chatEndpoint: '/chat/completions',
+    authHeader: (key) => key ? { 'Authorization': `Bearer ${key}` } : {}
+  }
+};
+
+export interface AIModel {
+  id: string;
+  name: string;
+}
+
 export class AIService {
   private client: AxiosInstance | null = null;
+  private context: vscode.ExtensionContext;
+  private cachedModels: AIModel[] = [];
 
-  constructor() {
+  constructor(context: vscode.ExtensionContext) {
+    this.context = context;
     this.initClient();
   }
 
-  private initClient(): void {
-    const config = vscode.workspace.getConfiguration('bojmate.ai');
-    const baseUrl = config.get<string>('baseUrl');
-    const apiKey = config.get<string>('apiKey');
+  private getConfig() {
+    return vscode.workspace.getConfiguration('bojmate.ai');
+  }
 
-    if (baseUrl && apiKey) {
-      this.client = axios.create({
-        baseURL: baseUrl,
-        timeout: 30000,
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  private initClient(): void {
+    const config = this.getConfig();
+    const provider = config.get<AIProvider>('provider', 'openai');
+    const apiKey = config.get<string>('apiKey', '');
+    const customBaseUrl = config.get<string>('baseUrl', '');
+
+    const providerConfig = PROVIDER_CONFIGS[provider];
+    const baseUrl = provider === 'local' ? customBaseUrl : providerConfig.baseUrl;
+
+    if (!baseUrl) {
+      this.client = null;
+      return;
     }
+
+    this.client = axios.create({
+      baseURL: baseUrl,
+      timeout: 60000,
+      headers: {
+        'Content-Type': 'application/json',
+        ...providerConfig.authHeader(apiKey)
+      }
+    });
   }
 
   isEnabled(): boolean {
-    const config = vscode.workspace.getConfiguration('bojmate.ai');
+    const config = this.getConfig();
     return config.get<boolean>('enabled', false) && this.client !== null;
+  }
+
+  async testConnection(): Promise<{ success: boolean; message: string }> {
+    if (!this.client) {
+      return { success: false, message: 'API 클라이언트가 초기화되지 않았습니다.' };
+    }
+
+    const config = this.getConfig();
+    const provider = config.get<AIProvider>('provider', 'openai');
+    const apiKey = config.get<string>('apiKey', '');
+
+    try {
+      if (provider === 'google') {
+        const response = await this.client.get(`/models?key=${apiKey}`);
+        return { success: true, message: `연결 성공! ${response.data.models?.length || 0}개 모델 발견` };
+      } else {
+        const providerConfig = PROVIDER_CONFIGS[provider];
+        const response = await this.client.get(providerConfig.modelsEndpoint);
+        const modelCount = response.data.data?.length || response.data.models?.length || 0;
+        return { success: true, message: `연결 성공! ${modelCount}개 모델 발견` };
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        return { success: false, message: `연결 실패: ${error.response?.data?.error?.message || error.message}` };
+      }
+      return { success: false, message: `연결 실패: ${String(error)}` };
+    }
+  }
+
+  async fetchModels(): Promise<AIModel[]> {
+    if (!this.client) {
+      return [];
+    }
+
+    const config = this.getConfig();
+    const provider = config.get<AIProvider>('provider', 'openai');
+    const apiKey = config.get<string>('apiKey', '');
+
+    try {
+      let models: AIModel[] = [];
+
+      if (provider === 'google') {
+        const response = await this.client.get(`/models?key=${apiKey}`);
+        models = (response.data.models || [])
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => ({
+            id: m.name.replace('models/', ''),
+            name: m.displayName || m.name
+          }));
+      } else if (provider === 'anthropic') {
+        // Anthropic doesn't have a models endpoint, use predefined list
+        models = [
+          { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
+          { id: 'claude-opus-4-20250514', name: 'Claude Opus 4' },
+          { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
+          { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+          { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus' }
+        ];
+      } else {
+        const providerConfig = PROVIDER_CONFIGS[provider];
+        const response = await this.client.get(providerConfig.modelsEndpoint);
+        const data = response.data.data || response.data.models || [];
+        models = data.map((m: any) => ({
+          id: m.id || m.name,
+          name: m.id || m.name
+        }));
+      }
+
+      // Filter for chat models
+      if (provider === 'openai') {
+        models = models.filter(m =>
+          m.id.includes('gpt') || m.id.includes('o1') || m.id.includes('o3')
+        );
+      }
+
+      this.cachedModels = models;
+      return models;
+    } catch (error) {
+      console.error('Failed to fetch models:', error);
+      return this.cachedModels;
+    }
+  }
+
+  getCachedModels(): AIModel[] {
+    return this.cachedModels;
   }
 
   async getHint(problem: Problem, level?: HintLevel): Promise<HintResponse> {
@@ -36,29 +182,54 @@ export class AIService {
       throw new Error('AI 힌트 기능이 비활성화되어 있습니다. 설정에서 활성화해주세요.');
     }
 
-    const config = vscode.workspace.getConfiguration('bojmate.ai');
+    const config = this.getConfig();
+    const provider = config.get<AIProvider>('provider', 'openai');
+    const model = config.get<string>('model', '');
+    const apiKey = config.get<string>('apiKey', '');
     const hintLevel = level || config.get<HintLevel>('hintLevel', 'algorithm');
 
-    const prompt = this.buildPrompt(problem, hintLevel);
+    if (!model) {
+      throw new Error('모델이 선택되지 않았습니다. 설정에서 모델을 선택해주세요.');
+    }
+
+    const systemPrompt = this.getSystemPrompt(hintLevel);
+    const userPrompt = this.buildPrompt(problem, hintLevel);
 
     try {
-      const response = await this.client!.post('/chat/completions', {
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPrompt(hintLevel)
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      });
+      let content: string;
 
-      const content = response.data.choices[0]?.message?.content || '';
+      if (provider === 'anthropic') {
+        const response = await this.client!.post('/messages', {
+          model,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }]
+        });
+        content = response.data.content[0]?.text || '';
+      } else if (provider === 'google') {
+        const response = await this.client!.post(
+          `/models/${model}:generateContent?key=${apiKey}`,
+          {
+            contents: [{
+              parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+            }]
+          }
+        );
+        content = response.data.candidates[0]?.content?.parts[0]?.text || '';
+      } else {
+        // OpenAI-compatible (openai, openrouter, local)
+        const response = await this.client!.post('/chat/completions', {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 4096
+        });
+        content = response.data.choices[0]?.message?.content || '';
+      }
+
       return this.parseResponse(content, hintLevel);
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -133,7 +304,6 @@ export class AIService {
       content
     };
 
-    // 알고리즘 태그 추출 시도
     const algorithmMatch = content.match(/알고리즘[:\s]*([^\n]+)/i);
     if (algorithmMatch) {
       response.algorithm = algorithmMatch[1]
@@ -142,7 +312,6 @@ export class AIService {
         .filter((s) => s);
     }
 
-    // 단계 추출 시도
     if (level === 'stepByStep' || level === 'fullSolution') {
       const steps = content.match(/(?:^|\n)\d+\.\s*([^\n]+)/g);
       if (steps) {
@@ -150,7 +319,6 @@ export class AIService {
       }
     }
 
-    // 코드 블록 추출
     if (level === 'fullSolution') {
       const codeMatch = content.match(/```(?:python|py)?\n([\s\S]*?)```/);
       if (codeMatch) {
@@ -161,7 +329,6 @@ export class AIService {
     return response;
   }
 
-  // 설정 변경 시 클라이언트 재초기화
   refreshClient(): void {
     this.initClient();
   }

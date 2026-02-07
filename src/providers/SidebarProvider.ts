@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { TimerService } from '../services/TimerService';
 import { SolvedAcService } from '../services/SolvedAcService';
+import { AIService } from '../services/AIService';
 import { getTierColor, getTierName, TIER_NAMES } from '../types';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
@@ -9,19 +10,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private timerService: TimerService;
   private solvedAcService: SolvedAcService;
+  private aiService: AIService;
   private extensionUri: vscode.Uri;
+  private tags: Array<{ key: string; name: string; problemCount: number }> = [];
 
   constructor(
     extensionUri: vscode.Uri,
     timerService: TimerService,
-    solvedAcService: SolvedAcService
+    solvedAcService: SolvedAcService,
+    aiService: AIService
   ) {
     this.extensionUri = extensionUri;
     this.timerService = timerService;
     this.solvedAcService = solvedAcService;
+    this.aiService = aiService;
   }
 
-  public resolveWebviewView(
+  public async resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
@@ -32,6 +37,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
       localResourceRoots: [this.extensionUri]
     };
+
+    // 태그 목록 로드
+    this.tags = await this.solvedAcService.getAllTags();
 
     webviewView.webview.html = this.getHtmlContent();
 
@@ -56,12 +64,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         case 'showStats':
           vscode.commands.executeCommand('bojmate.showStats');
           break;
+        case 'openAISettings':
+          vscode.commands.executeCommand('bojmate.configureAI');
+          break;
         case 'stopTimer':
           await this.timerService.stopTimer(message.status);
           this.refresh();
           break;
-        case 'searchByTier':
-          await this.searchByTier(message.tierMin, message.tierMax);
+        case 'search':
+          await this.search(message.tierMin, message.tierMax, message.tag);
           break;
         case 'refresh':
           this.refresh();
@@ -76,15 +87,25 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public refresh() {
     if (this._view) {
       const currentRecord = this.timerService.getCurrentRecord();
+      const aiEnabled = this.aiService.isEnabled();
+      const config = vscode.workspace.getConfiguration('bojmate.ai');
+      const provider = config.get<string>('provider', 'openai');
+      const model = config.get<string>('model', '');
+
       this._view.webview.postMessage({
         command: 'update',
-        currentProblem: currentRecord
+        currentProblem: currentRecord,
+        aiStatus: {
+          enabled: aiEnabled,
+          provider,
+          model
+        }
       });
     }
   }
 
-  private async searchByTier(tierMin: number, tierMax: number): Promise<void> {
-    const result = await this.solvedAcService.getProblemsByTier(tierMin, tierMax);
+  private async search(tierMin?: number, tierMax?: number, tag?: string): Promise<void> {
+    const result = await this.solvedAcService.searchByTierAndTag(tierMin, tierMax, tag);
 
     if (this._view) {
       this._view.webview.postMessage({
@@ -106,6 +127,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       .map(([level, name]) => `<option value="${level}">${name}</option>`)
       .join('');
 
+    const tagOptions = this.tags
+      .slice(0, 50) // 상위 50개 태그만
+      .map(tag => `<option value="${tag.key}">${tag.name} (${tag.problemCount})</option>`)
+      .join('');
+
     return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -113,11 +139,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BOJ Mate</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: var(--vscode-font-family);
       font-size: 13px;
@@ -125,9 +147,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       background: var(--vscode-sideBar-background);
       padding: 12px;
     }
-    .section {
-      margin-bottom: 16px;
-    }
+    .section { margin-bottom: 16px; }
     .section-title {
       font-weight: bold;
       margin-bottom: 8px;
@@ -135,10 +155,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       align-items: center;
       gap: 6px;
     }
-    .search-box {
-      display: flex;
-      gap: 6px;
-    }
+    .search-box { display: flex; gap: 6px; }
     .search-box input {
       flex: 1;
       padding: 6px 10px;
@@ -148,10 +165,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       border-radius: 4px;
       font-size: 13px;
     }
-    .search-box input:focus {
-      outline: 1px solid var(--vscode-focusBorder);
-    }
-    .search-box button {
+    .search-box input:focus { outline: 1px solid var(--vscode-focusBorder); }
+    .search-box button, .filter-row button {
       padding: 6px 12px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
@@ -159,7 +174,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       border-radius: 4px;
       cursor: pointer;
     }
-    .search-box button:hover {
+    .search-box button:hover, .filter-row button:hover {
       background: var(--vscode-button-hoverBackground);
     }
     .current-problem {
@@ -168,20 +183,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       border-radius: 6px;
       padding: 12px;
     }
-    .current-problem .title {
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-    .current-problem .timer {
-      font-size: 18px;
-      font-family: monospace;
-      margin: 8px 0;
-    }
-    .current-problem .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
+    .current-problem .title { font-weight: bold; margin-bottom: 6px; }
+    .current-problem .timer { font-size: 18px; font-family: monospace; margin: 8px 0; }
+    .current-problem .actions { display: flex; gap: 8px; margin-top: 10px; }
     .current-problem .actions button {
       flex: 1;
       padding: 6px;
@@ -190,26 +194,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       border-radius: 4px;
       cursor: pointer;
     }
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-    .btn-danger {
-      background: #dc3545;
-      color: white;
-    }
-    .tier-filter {
+    .btn-success { background: #28a745; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    .filter-row {
       display: flex;
-      gap: 8px;
+      gap: 6px;
+      margin-bottom: 8px;
+      align-items: center;
     }
-    .tier-filter select {
+    .filter-row select {
       flex: 1;
       padding: 6px;
       background: var(--vscode-dropdown-background);
       color: var(--vscode-dropdown-foreground);
       border: 1px solid var(--vscode-dropdown-border);
       border-radius: 4px;
+      font-size: 12px;
     }
+    .filter-row span { font-size: 12px; }
     .quick-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -231,13 +233,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     .quick-actions button:hover {
       background: var(--vscode-button-secondaryHoverBackground);
     }
-    .quick-actions .icon {
-      font-size: 18px;
-    }
-    .problem-list {
-      max-height: 200px;
-      overflow-y: auto;
-    }
+    .quick-actions .icon { font-size: 18px; }
+    .problem-list { max-height: 200px; overflow-y: auto; margin-top: 8px; }
     .problem-item {
       display: flex;
       align-items: center;
@@ -246,9 +243,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       border-radius: 4px;
       cursor: pointer;
     }
-    .problem-item:hover {
-      background: var(--vscode-list-hoverBackground);
-    }
+    .problem-item:hover { background: var(--vscode-list-hoverBackground); }
     .problem-item .tier-badge {
       width: 8px;
       height: 8px;
@@ -262,6 +257,33 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       color: var(--vscode-descriptionForeground);
       text-align: center;
       padding: 20px;
+    }
+    .ai-status {
+      font-size: 11px;
+      padding: 6px 8px;
+      background: var(--vscode-editor-background);
+      border-radius: 4px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ai-status .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .ai-status .enabled { background: #28a745; }
+    .ai-status .disabled { background: #dc3545; }
+    .ai-status button {
+      padding: 2px 8px;
+      font-size: 11px;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -283,20 +305,37 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   </div>
 
   <div class="section">
-    <div class="section-title">🏷️ 난이도 필터</div>
-    <div class="tier-filter">
+    <div class="section-title">🏷️ 필터 검색</div>
+    <div class="filter-row">
       <select id="tierMin">
-        <option value="1">Bronze V</option>
+        <option value="">난이도 (최소)</option>
         ${tierOptions}
       </select>
       <span>~</span>
       <select id="tierMax">
-        <option value="30">Ruby I</option>
+        <option value="">난이도 (최대)</option>
         ${tierOptions}
       </select>
-      <button onclick="searchByTier()">검색</button>
+    </div>
+    <div class="filter-row">
+      <select id="tagFilter">
+        <option value="">알고리즘 분류</option>
+        ${tagOptions}
+      </select>
+      <button onclick="search()">검색</button>
     </div>
     <div id="searchResults" class="problem-list"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">💡 AI 힌트</div>
+    <div id="aiStatus" class="ai-status">
+      <span>
+        <span class="status-dot disabled"></span>
+        설정 필요
+      </span>
+      <button onclick="openAISettings()">설정</button>
+    </div>
   </div>
 
   <div class="section">
@@ -340,26 +379,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    function runTests() {
-      vscode.postMessage({ command: 'runTests' });
-    }
+    function runTests() { vscode.postMessage({ command: 'runTests' }); }
+    function submitCode() { vscode.postMessage({ command: 'submitCode' }); }
+    function getHint() { vscode.postMessage({ command: 'getHint' }); }
+    function showStats() { vscode.postMessage({ command: 'showStats' }); }
+    function openAISettings() { vscode.postMessage({ command: 'openAISettings' }); }
 
-    function submitCode() {
-      vscode.postMessage({ command: 'submitCode' });
-    }
+    function search() {
+      const tierMin = document.getElementById('tierMin').value;
+      const tierMax = document.getElementById('tierMax').value;
+      const tag = document.getElementById('tagFilter').value;
 
-    function getHint() {
-      vscode.postMessage({ command: 'getHint' });
-    }
+      if (!tierMin && !tierMax && !tag) {
+        return;
+      }
 
-    function showStats() {
-      vscode.postMessage({ command: 'showStats' });
-    }
-
-    function searchByTier() {
-      const tierMin = parseInt(document.getElementById('tierMin').value);
-      const tierMax = parseInt(document.getElementById('tierMax').value);
-      vscode.postMessage({ command: 'searchByTier', tierMin, tierMax });
+      vscode.postMessage({
+        command: 'search',
+        tierMin: tierMin ? parseInt(tierMin) : undefined,
+        tierMax: tierMax ? parseInt(tierMax) : undefined,
+        tag: tag || undefined
+      });
     }
 
     function stopTimer(status) {
@@ -370,7 +410,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       const seconds = Math.floor(ms / 1000);
       const minutes = Math.floor(seconds / 60);
       const hours = Math.floor(minutes / 60);
-
       if (hours > 0) {
         return hours + ':' + String(minutes % 60).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
       }
@@ -379,13 +418,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     function updateCurrentProblem() {
       const container = document.getElementById('currentProblem');
-
       if (!currentProblem) {
         container.className = 'no-problem';
         container.innerHTML = '진행 중인 문제가 없습니다';
         return;
       }
-
       const elapsed = Date.now() - currentProblem.startTime;
       container.className = 'current-problem';
       container.innerHTML = \`
@@ -401,13 +438,33 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       \`;
     }
 
+    function updateAIStatus(aiStatus) {
+      const container = document.getElementById('aiStatus');
+      if (aiStatus.enabled) {
+        container.innerHTML = \`
+          <span>
+            <span class="status-dot enabled"></span>
+            \${aiStatus.provider} / \${aiStatus.model || '모델 미선택'}
+          </span>
+          <button onclick="openAISettings()">설정</button>
+        \`;
+      } else {
+        container.innerHTML = \`
+          <span>
+            <span class="status-dot disabled"></span>
+            설정 필요
+          </span>
+          <button onclick="openAISettings()">설정</button>
+        \`;
+      }
+    }
+
     function renderSearchResults(problems) {
       const container = document.getElementById('searchResults');
       if (!problems || problems.length === 0) {
         container.innerHTML = '<div class="no-problem">검색 결과가 없습니다</div>';
         return;
       }
-
       container.innerHTML = problems.map(p => \`
         <div class="problem-item" onclick="vscode.postMessage({ command: 'createProblem', problemId: '\${p.id}' })">
           <span class="tier-badge" style="background: \${p.tierColor}"></span>
@@ -427,6 +484,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             timerInterval = setInterval(updateCurrentProblem, 1000);
           }
           updateCurrentProblem();
+          if (message.aiStatus) {
+            updateAIStatus(message.aiStatus);
+          }
           break;
         case 'searchResults':
           renderSearchResults(message.problems);
@@ -434,14 +494,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // Enter 키로 검색
     document.getElementById('problemId').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        viewProblem();
-      }
+      if (e.key === 'Enter') viewProblem();
     });
 
-    // 초기화
     vscode.postMessage({ command: 'refresh' });
   </script>
 </body>
