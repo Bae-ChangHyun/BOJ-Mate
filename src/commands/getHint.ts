@@ -55,10 +55,11 @@ export class GetHintCommand {
       return;
     }
 
-    const levelItems: { label: string; description: string; value: HintLevel }[] = [
+    const levelItems: { label: string; description: string; value: HintLevel | 'custom' }[] = [
       { label: '알고리즘 분류', description: '어떤 알고리즘인지만', value: 'algorithm' },
       { label: '단계별 힌트', description: '풀이 과정 안내 (코드 없음)', value: 'stepByStep' },
-      { label: '전체 풀이', description: '풀이 + 코드', value: 'fullSolution' }
+      { label: '전체 풀이', description: '풀이 + 코드', value: 'fullSolution' },
+      { label: '직접 질문', description: '원하는 질문을 직접 입력', value: 'custom' }
     ];
 
     const selectedLevel = await vscode.window.showQuickPick(levelItems, {
@@ -67,6 +68,17 @@ export class GetHintCommand {
 
     if (!selectedLevel) {
       return;
+    }
+
+    let customPrompt: string | undefined;
+    if (selectedLevel.value === 'custom') {
+      customPrompt = await vscode.window.showInputBox({
+        prompt: '질문을 입력하세요 (문제 정보와 현재 코드가 함께 전달됩니다)',
+        placeHolder: '예: 이 문제에서 DP 테이블을 어떻게 정의해야 하나요?'
+      });
+      if (!customPrompt) {
+        return;
+      }
     }
 
     await vscode.window.withProgress(
@@ -96,7 +108,8 @@ export class GetHintCommand {
             }
           }
 
-          const hint = await this.aiService.getHint(problem, selectedLevel.value, userCode);
+          const hintLevel: HintLevel = selectedLevel.value === 'custom' ? 'stepByStep' : selectedLevel.value;
+          const hint = await this.aiService.getHint(problem, hintLevel, userCode, customPrompt);
 
           const panel = vscode.window.createWebviewPanel(
             'bojmateHint',

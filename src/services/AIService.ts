@@ -219,7 +219,7 @@ export class AIService {
     return this.cachedModels;
   }
 
-  async getHint(problem: Problem, level?: HintLevel, userCode?: string): Promise<HintResponse> {
+  async getHint(problem: Problem, level?: HintLevel, userCode?: string, customPrompt?: string): Promise<HintResponse> {
     if (!this.isEnabled()) {
       throw new Error('AI 힌트 기능이 비활성화되어 있습니다. 설정에서 활성화해주세요.');
     }
@@ -231,8 +231,10 @@ export class AIService {
       throw new Error('모델이 선택되지 않았습니다. 설정에서 모델을 선택해주세요.');
     }
 
-    const systemPrompt = this.getSystemPrompt(hintLevel, !!userCode);
-    const userPrompt = this.buildPrompt(problem, hintLevel, userCode);
+    const systemPrompt = customPrompt
+      ? '알고리즘 문제에 대한 질문에 마크다운으로 간결하게 답변하세요. 불필요한 서론/맺음말 없이 핵심만 작성하세요.'
+      : this.getSystemPrompt(hintLevel, !!userCode);
+    const userPrompt = this.buildPrompt(problem, hintLevel, userCode, customPrompt);
     const maxTokens = hintLevel === 'fullSolution' ? 2500 : 1500;
 
     try {
@@ -300,11 +302,11 @@ export class AIService {
       case 'stepByStep':
         return `${base}\n풀이 과정을 3~5단계로 나눠 설명하세요. 코드는 제공하지 마세요.`;
       case 'fullSolution':
-        return `${base}\n핵심 아이디어, 복잡도, Python 코드를 포함하여 답변하세요.`;
+        return `${base}\n핵심 아이디어, 복잡도를 설명하고, 마지막에 반드시 복사해서 바로 제출할 수 있는 최종 전체 코드를 코드 블록으로 제공하세요.`;
     }
   }
 
-  private buildPrompt(problem: Problem, level: HintLevel, userCode?: string): string {
+  private buildPrompt(problem: Problem, level: HintLevel, userCode?: string, customPrompt?: string): string {
     let prompt = `## 문제: ${problem.id}번 - ${problem.title}\n\n`;
     prompt += `### 시간 제한: ${problem.timeLimit}\n`;
     prompt += `### 메모리 제한: ${problem.memoryLimit}\n\n`;
@@ -326,7 +328,13 @@ export class AIService {
 
     if (userCode && userCode.trim()) {
       prompt += `---\n\n### 현재 작성 중인 코드\n\`\`\`\n${userCode}\n\`\`\`\n\n`;
-      prompt += `위 코드를 기반으로 다음 단계를 안내해주세요.`;
+      if (!customPrompt) {
+        prompt += `위 코드를 기반으로 다음 단계를 안내해주세요.`;
+      }
+    }
+
+    if (customPrompt) {
+      prompt += `---\n\n### 질문\n${customPrompt}`;
     }
 
     return prompt;
