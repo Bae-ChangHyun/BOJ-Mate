@@ -7,6 +7,7 @@
   "engines": {
     "vscode": "^1.80.0"
   },
+  "icon": "img.png",
   "categories": [
     "Other"
   ],
@@ -16,7 +17,6 @@
     "onCommand:bojmate.createProblem"
   ],
   "main": "./dist/extension.js",
-  "icon": "resources/icon.png",
   "contributes": {
     "commands": [
       {
