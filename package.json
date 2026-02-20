@@ -4,6 +4,7 @@
   "description": "백준 온라인 저지 문제 풀이를 위한 올인원 VS Code 익스텐션",
   "version": "0.0.1",
   "publisher": "boj-mate",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.80.0"
   },

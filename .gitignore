@@ -1,7 +1,29 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 dist/
 *.vsix
+
+# Test
 .vscode-test/
+
+# Logs
 *.log
+
+# OS files
 .DS_Store
+._*
+Thumbs.db
+
+# Environment variables
+.env
+.env.*
+
+# Claude AI
+.claude/
+CLAUDE.md
+
+# Personal notes
+todo.md
 docs/

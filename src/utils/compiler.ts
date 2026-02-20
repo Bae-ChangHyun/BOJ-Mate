@@ -25,7 +25,7 @@ export class CodeRunner {
     const config = LANGUAGE_CONFIG[language];
 
     // 컴파일이 필요 없는 언어
-    if (!config.compileCommand) {
+    if (!config.compileArgs) {
       return { success: true };
     }
 
@@ -33,14 +33,16 @@ export class CodeRunner {
     const fileName = path.basename(filePath, config.extension);
     const outputPath = path.join(dir, fileName);
 
-    const command = config.compileCommand
-      .replace('{file}', filePath)
-      .replace('{output}', outputPath)
-      .replace('{dir}', dir);
+    const resolvedArgs = config.compileArgs.map(arg =>
+      arg.replace('{file}', filePath)
+        .replace('{output}', outputPath)
+        .replace('{dir}', dir)
+    );
+    const cmd = resolvedArgs[0];
+    const cmdArgs = resolvedArgs.slice(1);
 
     return new Promise((resolve) => {
-      const [cmd, ...args] = command.split(' ');
-      const proc = spawn(cmd, args, { cwd: dir });
+      const proc = spawn(cmd, cmdArgs, { cwd: dir });
 
       let stderr = '';
       proc.stderr.on('data', (data) => {
@@ -72,12 +74,13 @@ export class CodeRunner {
     const dir = path.dirname(filePath);
     const fileName = path.basename(filePath, config.extension);
 
-    let command = config.runCommand
-      .replace('{file}', filePath)
-      .replace('{output}', compiledPath || path.join(dir, fileName))
-      .replace('{dir}', dir);
-
-    const [cmd, ...args] = command.split(' ');
+    const resolvedArgs = config.runArgs.map(arg =>
+      arg.replace('{file}', filePath)
+        .replace('{output}', compiledPath || path.join(dir, fileName))
+        .replace('{dir}', dir)
+    );
+    const cmd = resolvedArgs[0];
+    const args = resolvedArgs.slice(1);
     const effectiveTimeout = timeLimitMs || this.defaultTimeoutMs;
 
     return new Promise((resolve) => {

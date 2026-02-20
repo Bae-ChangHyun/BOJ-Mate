@@ -140,6 +140,7 @@ export class AISettingsProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
   <title>AI 설정</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -417,6 +418,8 @@ export class AISettingsProvider {
     let settings = {};
     let models = [];
 
+    function escMsg(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
     const providerDescriptions = {
       openai: 'OpenAI API 키를 입력하세요',
       anthropic: 'Anthropic API 키를 입력하세요',
@@ -560,10 +563,10 @@ export class AISettingsProvider {
           if (message.status === 'testing') {
             statusDiv.innerHTML = '<div class="status loading"><span class="spinner"></span> 연결 중...</div>';
           } else if (message.status === 'success') {
-            statusDiv.innerHTML = '<div class="status success">✓ ' + message.message + '</div>';
+            statusDiv.innerHTML = '<div class="status success">✓ ' + escMsg(message.message) + '</div>';
             vscode.postMessage({ command: 'fetchModels' });
           } else {
-            statusDiv.innerHTML = '<div class="status error">✕ ' + message.message + '</div>';
+            statusDiv.innerHTML = '<div class="status error">✕ ' + escMsg(message.message) + '</div>';
           }
           break;
         case 'advancedParamsStatus':
@@ -572,7 +575,7 @@ export class AISettingsProvider {
             apStatus.innerHTML = '<div class="status success">저장됨</div>';
             setTimeout(() => { apStatus.innerHTML = ''; }, 2000);
           } else {
-            apStatus.innerHTML = '<div class="status error">' + message.message + '</div>';
+            apStatus.innerHTML = '<div class="status error">' + escMsg(message.message) + '</div>';
           }
           break;
         case 'modelsStatus':

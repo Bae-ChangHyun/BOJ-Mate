@@ -56,13 +56,41 @@ export function parseProblemPage(html: string, problemId: string): Problem {
 }
 
 export function cleanHtml(html: string): string {
-  // 불필요한 속성 제거하고 깔끔하게 정리
-  return html
-    .replace(/class="[^"]*"/g, '')
-    .replace(/style="[^"]*"/g, '')
-    .replace(/id="[^"]*"/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  if (!html) { return ''; }
+  let cleaned = html;
+  // 위험한 태그 제거
+  cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  cleaned = cleaned.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+  cleaned = cleaned.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
+  cleaned = cleaned.replace(/<embed\b[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '');
+  cleaned = cleaned.replace(/<meta\b[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<link\b[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  // 이벤트 핸들러 제거
+  cleaned = cleaned.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
+  cleaned = cleaned.replace(/\son\w+\s*=\s*[^\s>]*/gi, '');
+  // 위험한 프로토콜 제거
+  cleaned = cleaned.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
+  cleaned = cleaned.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, '');
+  cleaned = cleaned.replace(/src\s*=\s*["']data:[^"']*["']/gi, '');
+  // 불필요한 속성 제거
+  cleaned = cleaned.replace(/\sclass\s*=\s*"[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\sstyle\s*=\s*"[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\sid\s*=\s*"[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  return cleaned;
+}
+
+export function escapeHtml(text: string): string {
+  if (!text) { return ''; }
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 export function htmlToMarkdown(html: string): string {

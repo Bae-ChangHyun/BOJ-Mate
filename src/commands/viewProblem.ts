@@ -107,7 +107,8 @@ export class ViewProblemCommand {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${problem.title}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline';">
+  <title>${this.escapeHtml(problem.title)}</title>
   <style>
     :root {
       --bg-color: var(--vscode-editor-background);

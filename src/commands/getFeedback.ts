@@ -94,11 +94,12 @@ export class GetFeedbackCommand {
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
   <style>${webviewStyles()}</style>
 </head>
 <body>
-  <h1>#${problemId} ${this.escapeHtml(problem.title)}</h1>
-  <span class="badge">${language}</span>
+  <h1>#${this.escapeHtml(problemId)} ${this.escapeHtml(problem.title)}</h1>
+  <span class="badge">${this.escapeHtml(language)}</span>
   <div class="markdown-body">${feedbackHtml}</div>
 </body>
 </html>`;

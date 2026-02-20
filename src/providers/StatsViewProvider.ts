@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { TimerService } from '../services/TimerService';
 import { getTierColor } from '../types';
+import { escapeHtml } from '../utils/parser';
 
 export class StatsViewProvider {
   private timerService: TimerService;
@@ -64,9 +65,9 @@ export class StatsViewProvider {
       .map(
         (r) => `
         <tr>
-          <td>${r.problemId}</td>
-          <td>${r.title}</td>
-          <td><span class="tier-badge" style="background: ${getTierColor(r.tier)}">${r.tierName}</span></td>
+          <td>${escapeHtml(r.problemId)}</td>
+          <td>${escapeHtml(r.title)}</td>
+          <td><span class="tier-badge" style="background: ${getTierColor(r.tier)}">${escapeHtml(r.tierName)}</span></td>
           <td>${r.endTime ? formatTime(r.endTime - r.startTime) : '-'}</td>
           <td>${new Date(r.startTime).toLocaleDateString()}</td>
         </tr>
@@ -79,6 +80,7 @@ export class StatsViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
   <title>통계</title>
   <style>
     body {

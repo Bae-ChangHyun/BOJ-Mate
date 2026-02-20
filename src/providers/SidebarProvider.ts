@@ -187,6 +187,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
   <title>BOJ Mate</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -430,6 +431,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     let currentProblem = null;
     let timerInterval = null;
 
+    function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function safeColor(c) { return /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : '#888'; }
+
     function cmd(name) { vscode.postMessage({ command: name }); }
     function openAISettings() { cmd('openAISettings'); }
 
@@ -480,11 +484,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       let html = '<div class="result-header">' + total + '개 중 ' + problems.length + '개 표시</div>';
       html += '<div class="problem-list">';
       for (const p of problems) {
-        html += '<div class="problem-item" onclick="selectProblem(\\'' + p.id + '\\', \\'createProblem\\')" title="클릭하여 생성">' +
-          '<span class="tier-dot" style="background:' + p.tierColor + '"></span>' +
-          '<span class="pid">' + p.id + '</span>' +
-          '<span class="pname">' + p.title + '</span>' +
-          '<span class="ptier">' + p.tierName + '</span>' +
+        html += '<div class="problem-item" onclick="selectProblem(\\'' + esc(p.id) + '\\', \\'createProblem\\')" title="클릭하여 생성">' +
+          '<span class="tier-dot" style="background:' + safeColor(p.tierColor) + '"></span>' +
+          '<span class="pid">' + esc(p.id) + '</span>' +
+          '<span class="pname">' + esc(p.title) + '</span>' +
+          '<span class="ptier">' + esc(p.tierName) + '</span>' +
           '</div>';
       }
       html += '</div>';

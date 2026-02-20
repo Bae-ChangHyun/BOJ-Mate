@@ -109,41 +109,41 @@ export const LANGUAGE_CONFIG: Record<SupportedLanguage, {
   extension: string;
   bojLanguageId: number;
   name: string;
-  compileCommand?: string;
-  runCommand: string;
+  compileArgs?: string[];
+  runArgs: string[];
 }> = {
   cpp: {
     extension: '.cpp',
     bojLanguageId: 1001, // C++17
     name: 'C++',
-    compileCommand: 'g++ -std=c++17 -O2 -o {output} {file}',
-    runCommand: '{output}'
+    compileArgs: ['g++', '-std=c++17', '-O2', '-o', '{output}', '{file}'],
+    runArgs: ['{output}']
   },
   py: {
     extension: '.py',
     bojLanguageId: 28, // Python 3
     name: 'Python',
-    runCommand: 'python3 {file}'
+    runArgs: ['python3', '{file}']
   },
   java: {
     extension: '.java',
     bojLanguageId: 93, // Java 11
     name: 'Java',
-    compileCommand: 'javac {file}',
-    runCommand: 'java -cp {dir} Main'
+    compileArgs: ['javac', '{file}'],
+    runArgs: ['java', '-cp', '{dir}', 'Main']
   },
   js: {
     extension: '.js',
     bojLanguageId: 17, // Node.js
     name: 'JavaScript',
-    runCommand: 'node {file}'
+    runArgs: ['node', '{file}']
   },
   rs: {
     extension: '.rs',
     bojLanguageId: 94, // Rust 2021
     name: 'Rust',
-    compileCommand: 'rustc -O -o {output} {file}',
-    runCommand: '{output}'
+    compileArgs: ['rustc', '-O', '-o', '{output}', '{file}'],
+    runArgs: ['{output}']
   }
 };
 

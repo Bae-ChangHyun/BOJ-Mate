@@ -218,11 +218,17 @@ fn main() {
   }
 
   private sanitizeFileName(name: string): string {
-    return name
-      .replace(/[\/\\:*?"<>|]/g, '')   // 파일시스템 금지 문자 제거
-      .replace(/\s+/g, '_')            // 공백 → _
-      .replace(/_+/g, '_')             // 연속 _ 정리
-      .replace(/^_|_$/g, '');           // 양끝 _ 제거
+    if (!name) { return 'unnamed'; }
+    let sanitized = name;
+    sanitized = sanitized.replace(/\0/g, '');
+    sanitized = sanitized.replace(/\.\./g, '');
+    sanitized = sanitized.replace(/[\/\\:*?"<>|]/g, '');
+    sanitized = sanitized.replace(/[\x00-\x1F]/g, '');
+    sanitized = sanitized.replace(/\s+/g, '_');
+    sanitized = sanitized.replace(/_+/g, '_');
+    sanitized = sanitized.replace(/^_|_$/g, '');
+    if (sanitized.length > 200) { sanitized = sanitized.substring(0, 200); }
+    return sanitized || 'unnamed';
   }
 
   private getTierGroup(tier: number): string {

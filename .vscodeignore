@@ -9,3 +9,5 @@ tsconfig.json
 test/**
 *.map
 .eslintrc.json
+CLAUDE.md
+LICENSE

@@ -123,10 +123,11 @@ export class GetHintCommand {
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
   <style>${webviewStyles()}</style>
 </head>
 <body>
-  <h1>#${problemId} ${this.escapeHtml(problem.title)}</h1>
+  <h1>#${this.escapeHtml(problemId!)} ${this.escapeHtml(problem.title)}</h1>
   <div class="markdown-body">${contentHtml}</div>
 </body>
 </html>`;
