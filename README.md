@@ -1,5 +1,18 @@
 # BOJ Mate 🎯
 
+<p align="center">
+  <img src="marketplace-banner.png" alt="BOJ Mate on VS Code Marketplace" width="700"/>
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=BaeChangHyun.boj-mate">
+    <img src="https://img.shields.io/visual-studio-marketplace/v/BaeChangHyun.boj-mate?label=VS%20Code%20Marketplace&color=blue" alt="VS Code Marketplace"/>
+  </a>
+  <a href="https://github.com/Bae-ChangHyun/BOJ-Mate/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/Bae-ChangHyun/BOJ-Mate" alt="License"/>
+  </a>
+</p>
+
 백준 온라인 저지 문제 풀이를 위한 올인원 VS Code 익스텐션
 
 ## Demo
@@ -37,7 +50,10 @@ https://github.com/user-attachments/assets/7d1d4ba1-3c34-4dc4-bdf1-eb4d343769c6
 3. "BOJ Mate" 검색
 4. Install 클릭
 
+또는 [VS Code Marketplace 페이지](https://marketplace.visualstudio.com/items?itemName=BaeChangHyun.boj-mate)에서 직접 다운로드할 수 있습니다.
+
 ### VSIX
+[GitHub Releases](https://github.com/Bae-ChangHyun/BOJ-Mate/releases)에서 `.vsix` 파일을 다운로드한 후:
 ```bash
 code --install-extension boj-mate-0.0.1.vsix
 ```
