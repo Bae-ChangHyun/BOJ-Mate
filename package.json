@@ -1,16 +1,35 @@
 {
   "name": "boj-mate",
   "displayName": "BOJ Mate",
-  "description": "백준 온라인 저지 문제 풀이를 위한 올인원 VS Code 익스텐션",
+  "description": "백준 온라인 저지 문제 풀이를 위한 올인원 VS Code 익스텐션 - 문제 검색, 코드 실행, AI 힌트/피드백, 풀이 타이머, 통계, 코드 제출",
   "version": "0.0.1",
-  "publisher": "boj-mate",
+  "publisher": "BaeChangHyun",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bae-ChangHyun/BOJ-Mate"
+  },
+  "homepage": "https://github.com/Bae-ChangHyun/BOJ-Mate#readme",
+  "bugs": {
+    "url": "https://github.com/Bae-ChangHyun/BOJ-Mate/issues"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
-  "icon": "img.png",
+  "icon": "icon.png",
   "categories": [
+    "Programming Languages",
+    "Education",
     "Other"
+  ],
+  "keywords": [
+    "백준",
+    "BOJ",
+    "baekjoon",
+    "알고리즘",
+    "algorithm",
+    "competitive-programming",
+    "PS"
   ],
   "activationEvents": [
     "onView:bojmate.sidebarView",
