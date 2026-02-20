@@ -4,7 +4,8 @@
 
 ## Demo
 
-> 동영상은 추후 추가 예정
+https://github.com/user-attachments/assets/7d1d4ba1-3c34-4dc4-bdf1-eb4d343769c6
+
 
 ## Features
 
