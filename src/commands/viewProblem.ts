@@ -77,10 +77,10 @@ export class ViewProblemCommand {
   private getWebviewContent(problem: Problem): string {
     const tierColor = problem.tier ? getTierColor(problem.tier) : '#888';
     const tierBadge = problem.tierName
-      ? `<span class="tier-badge" style="background: ${tierColor}">${problem.tierName}</span>`
+      ? `<span class="tier-badge" style="background: ${this.escapeHtml(tierColor)}">${this.escapeHtml(problem.tierName)}</span>`
       : '';
 
-    const tags = problem.tags?.map((t) => `<span class="tag">${t}</span>`).join('') || '';
+    const tags = problem.tags?.map((t) => `<span class="tag">${this.escapeHtml(t)}</span>`).join('') || '';
 
     const testCasesHtml = problem.testCases
       .map(
@@ -233,8 +233,8 @@ export class ViewProblemCommand {
   </div>
 
   <div class="meta">
-    <span>⏱️ 시간 제한: ${problem.timeLimit}</span>
-    <span>💾 메모리 제한: ${problem.memoryLimit}</span>
+    <span>⏱️ 시간 제한: ${this.escapeHtml(problem.timeLimit)}</span>
+    <span>💾 메모리 제한: ${this.escapeHtml(problem.memoryLimit)}</span>
   </div>
 
   ${tags ? `<div class="tags">${tags}</div>` : ''}

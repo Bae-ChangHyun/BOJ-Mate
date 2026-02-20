@@ -220,13 +220,15 @@ fn main() {
   private sanitizeFileName(name: string): string {
     if (!name) { return 'unnamed'; }
     let sanitized = name;
-    sanitized = sanitized.replace(/\0/g, '');
-    sanitized = sanitized.replace(/\.\./g, '');
-    sanitized = sanitized.replace(/[\/\\:*?"<>|]/g, '');
     sanitized = sanitized.replace(/[\x00-\x1F]/g, '');
+    sanitized = sanitized.replace(/[\/\\:*?"<>|]/g, '');
+    // 재귀적으로 .. 제거 (.... → .. 방지)
+    while (sanitized.includes('..')) {
+      sanitized = sanitized.replace(/\.\./g, '');
+    }
     sanitized = sanitized.replace(/\s+/g, '_');
     sanitized = sanitized.replace(/_+/g, '_');
-    sanitized = sanitized.replace(/^_|_$/g, '');
+    sanitized = sanitized.replace(/^[._]+|[._]+$/g, '');
     if (sanitized.length > 200) { sanitized = sanitized.substring(0, 200); }
     return sanitized || 'unnamed';
   }

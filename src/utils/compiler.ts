@@ -21,12 +21,36 @@ export interface ExecutionResult {
 export class CodeRunner {
   private readonly defaultTimeoutMs: number = 5000; // 5초 기본 타임아웃
 
+  private validateFilePath(filePath: string): string {
+    const resolved = path.resolve(filePath);
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      throw new Error('워크스페이스가 열려있지 않습니다.');
+    }
+    const isInsideWorkspace = workspaceFolders.some(
+      folder => resolved.startsWith(folder.uri.fsPath + path.sep) || resolved === folder.uri.fsPath
+    );
+    if (!isInsideWorkspace) {
+      throw new Error('보안: 워크스페이스 외부 경로는 실행할 수 없습니다.');
+    }
+    if (resolved.includes('\0')) {
+      throw new Error('보안: 경로에 허용되지 않는 문자가 포함되어 있습니다.');
+    }
+    return resolved;
+  }
+
   async compile(filePath: string, language: SupportedLanguage): Promise<CompileResult> {
     const config = LANGUAGE_CONFIG[language];
 
     // 컴파일이 필요 없는 언어
     if (!config.compileArgs) {
       return { success: true };
+    }
+
+    try {
+      filePath = this.validateFilePath(filePath);
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
     }
 
     const dir = path.dirname(filePath);
@@ -70,6 +94,12 @@ export class CodeRunner {
     compiledPath?: string,
     timeLimitMs?: number
   ): Promise<ExecutionResult> {
+    try {
+      filePath = this.validateFilePath(filePath);
+    } catch (e) {
+      return { stdout: '', stderr: (e as Error).message, exitCode: null, executionTime: 0, timeout: false };
+    }
+
     const config = LANGUAGE_CONFIG[language];
     const dir = path.dirname(filePath);
     const fileName = path.basename(filePath, config.extension);

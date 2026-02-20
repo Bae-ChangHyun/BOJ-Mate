@@ -102,7 +102,7 @@ export class AuthService {
         valid: true
       });
 
-      vscode.window.showInformationMessage(`쿠키가 안전하게 저장되었습니다. (길이: ${normalizedCookie.length})`);
+      vscode.window.showInformationMessage('쿠키가 안전하게 저장되었습니다.');
       return true;
     } catch (error) {
       vscode.window.showErrorMessage(`쿠키 저장 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
