@@ -12,3 +12,7 @@ test/**
 CLAUDE.md
 docs/**
 LICENSE
+.claude/**
+.playwright-cli/**
+bog-mate.mp4
+todo.md
