@@ -132,6 +132,12 @@ code --install-extension boj-mate-0.0.1.vsix
 - 이 익스텐션의 사용으로 인해 발생하는 모든 책임은 사용자에게 있습니다.
 - 백준 측에서 API가 공식 제공되면 스크래핑 대신 API를 사용하도록 전환할 예정입니다.
 
+## Acknowledgments
+
+이 프로젝트는 [BOJ-extension](https://github.com/dltkdgns00/BOJ-extension) (by [@dltkdgns00](https://github.com/dltkdgns00))에서 영감을 받아 개발되었습니다.
+
+BOJ Mate는 완전히 새로운 아키텍처로 재작성되었으며, AI 힌트/피드백, 풀이 타이머, 통계, 코드 제출 등의 기능이 추가되었습니다.
+
 ## License
 
 MIT License

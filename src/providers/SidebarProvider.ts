@@ -3,6 +3,7 @@ import { TimerService } from '../services/TimerService';
 import { SolvedAcService } from '../services/SolvedAcService';
 import { AIService } from '../services/AIService';
 import { getTierColor, getTierName, TIER_NAMES } from '../types';
+import { escapeHtml } from '../utils/parser';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'bojmate.sidebarView';
@@ -179,7 +180,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     const tagOptions = this.tags
       .slice(0, 50)
-      .map(tag => `<option value="${tag.key}">${tag.name} (${tag.problemCount})</option>`)
+      .map(tag => `<option value="${escapeHtml(tag.key)}">${escapeHtml(tag.name)} (${tag.problemCount})</option>`)
       .join('');
 
     return `<!DOCTYPE html>
@@ -514,9 +515,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       const elapsed = Date.now() - currentProblem.startTime;
       el.className = 'current-problem';
       el.innerHTML =
-        '<div class="title">' + currentProblem.problemId + '번: ' + currentProblem.title + '</div>' +
+        '<div class="title">' + esc(currentProblem.problemId) + '번: ' + esc(currentProblem.title) + '</div>' +
         '<div class="timer">' + formatTime(elapsed) + '</div>' +
-        '<div class="meta">시도 ' + currentProblem.attempts + '회 · ' + currentProblem.tierName + '</div>' +
+        '<div class="meta">시도 ' + currentProblem.attempts + '회 · ' + esc(currentProblem.tierName) + '</div>' +
         '<div class="actions">' +
           '<button class="btn-success" onclick="vscode.postMessage({command:\\'stopTimer\\',status:\\'solved\\'})">완료</button>' +
           '<button class="btn-danger" onclick="vscode.postMessage({command:\\'stopTimer\\',status:\\'failed\\'})">포기</button>' +
@@ -527,7 +528,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       const el = document.getElementById('aiStatus');
       if (ai.enabled) {
         el.innerHTML = '<span><span class="status-dot enabled"></span>' +
-          ai.provider + ' / ' + (ai.model || '모델 미선택') + '</span>' +
+          esc(ai.provider) + ' / ' + esc(ai.model || '모델 미선택') + '</span>' +
           '<button onclick="openAISettings()">설정</button>';
       } else {
         el.innerHTML = '<span><span class="status-dot disabled"></span>설정 필요</span>' +

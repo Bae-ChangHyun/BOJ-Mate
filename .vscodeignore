@@ -10,4 +10,5 @@ test/**
 *.map
 .eslintrc.json
 CLAUDE.md
+docs/**
 LICENSE
