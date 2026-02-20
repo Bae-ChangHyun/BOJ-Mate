@@ -1,7 +1,7 @@
 # BOJ Mate 🎯
 
 <p align="center">
-  <img src="marketplace-banner.png" alt="BOJ Mate on VS Code Marketplace" width="700"/>
+  <img src="marketplace-banner.png" alt="BOJ Mate on VS Code Marketplace" width="100%"/>
 </p>
 
 <p align="center">
