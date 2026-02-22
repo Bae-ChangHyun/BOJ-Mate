@@ -210,17 +210,32 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     /* 검색 */
+    .search-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
     .search-input {
-      width: 100%;
+      flex: 1;
       padding: 7px 10px;
       border: 1px solid var(--vscode-input-border);
       background: var(--vscode-input-background);
       color: var(--vscode-input-foreground);
       border-radius: 4px;
       font-size: 13px;
-      margin-bottom: 8px;
     }
     .search-input:focus { outline: 1px solid var(--vscode-focusBorder); }
+    .search-btn {
+      padding: 7px 10px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .search-btn:hover { background: var(--vscode-button-hoverBackground); }
     .filter-row {
       display: flex;
       gap: 6px;
@@ -294,6 +309,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       color: var(--vscode-descriptionForeground);
       flex-shrink: 0;
     }
+    .problem-item .item-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .problem-item .item-actions button {
+      padding: 2px 6px;
+      font-size: 10px;
+      border: 1px solid var(--vscode-button-secondaryBackground);
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .problem-item .item-actions button:hover {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
     .empty-msg {
       color: var(--vscode-descriptionForeground);
       text-align: center;
@@ -366,8 +398,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   <!-- 문제 검색 -->
   <div class="section">
     <div class="section-title">문제 검색</div>
-    <input type="text" class="search-input" id="searchQuery"
-           placeholder="번호, 제목, 또는 키워드 검색" />
+    <div class="search-row">
+      <input type="text" class="search-input" id="searchQuery"
+             placeholder="번호, 제목, 또는 키워드 검색" />
+      <button class="search-btn" onclick="doSearch()" title="검색">&#x1F50D;</button>
+    </div>
     <div class="filter-row">
       <select id="tierMin">
         <option value="">최소 난이도</option>
@@ -384,11 +419,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <option value="">알고리즘 분류</option>
         ${tagOptions}
       </select>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="doSearch()">검색</button>
-      <button class="btn btn-secondary" onclick="directCreate()">바로 생성</button>
-      <button class="btn btn-secondary" onclick="directView()">보기</button>
     </div>
     <div id="searchResults"></div>
   </div>
@@ -456,19 +486,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       });
     }
 
-    function directCreate() {
-      const q = document.getElementById('searchQuery').value.trim();
-      if (q && /^\\d+$/.test(q)) {
-        vscode.postMessage({ command: 'createProblem', problemId: q });
-      }
-    }
-
-    function directView() {
-      const q = document.getElementById('searchQuery').value.trim();
-      if (q && /^\\d+$/.test(q)) {
-        vscode.postMessage({ command: 'viewProblem', problemId: q });
-      }
-    }
 
     function selectProblem(id, action) {
       vscode.postMessage({ command: action, problemId: id });
@@ -485,11 +502,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       let html = '<div class="result-header">' + total + '개 중 ' + problems.length + '개 표시</div>';
       html += '<div class="problem-list">';
       for (const p of problems) {
-        html += '<div class="problem-item" onclick="selectProblem(\\'' + esc(p.id) + '\\', \\'createProblem\\')" title="클릭하여 생성">' +
+        html += '<div class="problem-item">' +
           '<span class="tier-dot" style="background:' + safeColor(p.tierColor) + '"></span>' +
           '<span class="pid">' + esc(p.id) + '</span>' +
           '<span class="pname">' + esc(p.title) + '</span>' +
           '<span class="ptier">' + esc(p.tierName) + '</span>' +
+          '<span class="item-actions">' +
+            '<button onclick="selectProblem(\\'' + esc(p.id) + '\\', \\'viewProblem\\')" title="문제 보기">보기</button>' +
+            '<button onclick="selectProblem(\\'' + esc(p.id) + '\\', \\'createProblem\\')" title="문제 생성">생성</button>' +
+          '</span>' +
           '</div>';
       }
       html += '</div>';

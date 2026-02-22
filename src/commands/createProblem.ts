@@ -60,7 +60,7 @@ export class CreateProblemCommand {
     const language = selectedLanguage?.value || (defaultLanguage as SupportedLanguage);
 
     // 진행 표시
-    await vscode.window.withProgress(
+    const result = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: `문제 ${problemId} 생성 중...`,
@@ -95,26 +95,31 @@ export class CreateProblemCommand {
           const document = await vscode.workspace.openTextDocument(codePath);
           await vscode.window.showTextDocument(document);
 
-          // 타이머 시작 확인
-          const startTimer = await vscode.window.showInformationMessage(
-            `✅ 문제 ${problemId}번이 생성되었습니다. 타이머를 시작할까요?`,
-            '시작',
-            '나중에'
-          );
-
-          if (startTimer === '시작') {
-            await this.timerService.startTimer(
-              problemId!,
-              problem.title,
-              tier,
-              tierName,
-              language
-            );
-          }
+          return { problem, tier, tierName };
         } catch (error) {
           vscode.window.showErrorMessage(`문제 생성 실패: ${error}`);
+          return null;
         }
       }
     );
+
+    // 타이머 시작 확인 (프로그레스 바 밖에서 처리)
+    if (result) {
+      const startTimer = await vscode.window.showInformationMessage(
+        `문제 ${problemId}번이 생성되었습니다. 타이머를 시작할까요?`,
+        '시작',
+        '나중에'
+      );
+
+      if (startTimer === '시작') {
+        await this.timerService.startTimer(
+          problemId!,
+          result.problem.title,
+          result.tier,
+          result.tierName,
+          language
+        );
+      }
+    }
   }
 }
